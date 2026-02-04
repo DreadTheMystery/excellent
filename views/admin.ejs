@@ -1,0 +1,58 @@
+<%- include('partials/adminHeader', { title: 'Inquiries' }) %>
+    <%- include('partials/adminNav', { title: 'Inquiries' }) %>
+
+        <main class="container section">
+            <% if (!inquiries.length) { %>
+                <div class="card">No inquiries yet.</div>
+                <% } else { %>
+                    <div class="table-wrapper">
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Name</th>
+                                    <th>Contact</th>
+                                    <th>Section</th>
+                                    <th>Message</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <% inquiries.forEach((row)=> { %>
+                                    <tr>
+                                        <td>
+                                            <%= row.created_at %>
+                                        </td>
+                                        <td>
+                                            <%= row.name %>
+                                        </td>
+                                        <td>
+                                            <div style="display:flex; flex-direction:column; gap:0.2rem;">
+                                                <small
+                                                    style="display:flex; align-items:center; gap:0.4rem; color:#64748b;">
+                                                    <i class="ri-mail-line"></i>
+                                                    <%= row.email %>
+                                                </small>
+                                                <small
+                                                    style="display:flex; align-items:center; gap:0.4rem; color:var(--dark); font-weight:500;">
+                                                    <i class="ri-phone-line"></i>
+                                                    <%= row.phone %>
+                                                </small>
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <span class="badge badge-primary">
+                                                <%= row.section %>
+                                            </span>
+                                        </td>
+                                        <td style="max-width:300px; line-height:1.5;">
+                                            <%= row.message %>
+                                        </td>
+                                    </tr>
+                                    <% }) %>
+                            </tbody>
+                        </table>
+                    </div>
+                    <% } %>
+        </main>
+
+        <%- include('partials/adminFooter') %>

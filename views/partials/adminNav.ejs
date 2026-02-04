@@ -1,0 +1,36 @@
+<header class="admin-top">
+    <div class="container admin-top-inner">
+        <div class="admin-brand">
+            <i class="ri-government-line"></i>
+            <div>
+                <h1 class="admin-title">
+                    <%= title %>
+                </h1>
+                <p class="admin-subtitle">School Management Portal</p>
+            </div>
+        </div>
+        <form action="/logout" method="POST">
+            <button class="btn btn-sm btn-outline" type="submit"><i class="ri-logout-box-r-line"></i> Logout</button>
+        </form>
+    </div>
+</header>
+<nav class="admin-nav">
+    <div class="container admin-nav-inner">
+        <a href="/dashboard" class="<%= title === 'Dashboard' ? 'active' : '' %>"><i class="ri-dashboard-line"></i>
+            Overview</a>
+        <a href="/dashboard/students" class="<%= title === 'Students' ? 'active' : '' %>"><i
+                class="ri-user-smile-line"></i> Students</a>
+        <a href="/dashboard/teachers" class="<%= title === 'Teachers' ? 'active' : '' %>"><i
+                class="ri-presentation-line"></i> Teachers</a>
+        <a href="/dashboard/payments" class="<%= title === 'Student Payments' ? 'active' : '' %>"><i
+                class="ri-hand-coin-line"></i> Payments</a>
+        <a href="/dashboard/finance" class="<%= title === 'Finance' ? 'active' : '' %>"><i class="ri-wallet-3-line"></i>
+            Finance</a>
+        <a href="/dashboard/exams" class="<%= title === 'Exams' ? 'active' : '' %>"><i class="ri-file-list-3-line"></i>
+            Exams</a>
+        <a href="/dashboard/results" class="<%= title === 'Results' ? 'active' : '' %>"><i
+                class="ri-bar-chart-groupped-line"></i> Results</a>
+        <a href="/admin" class="<%= title === 'Inquiries' ? 'active' : '' %>"><i class="ri-message-3-line"></i>
+            Inquiries</a>
+    </div>
+</nav>

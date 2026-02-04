@@ -1,0 +1,73 @@
+<%- include('partials/adminHeader', { title: 'Finance' }) %>
+    <%- include('partials/adminNav', { title: 'Finance' }) %>
+
+        <main class="container section">
+            <div class="panel">
+                <h2>Add Finance Record</h2>
+                <form action="/dashboard/finance" method="POST" class="form grid-form">
+                    <input type="text" name="title" placeholder="Title" required />
+                    <input type="text" name="category" placeholder="Category (Fees, Salaries, Utilities)" required />
+                    <input type="number" name="amount" step="0.01" placeholder="Amount (NGN)" required />
+                    <select name="type" required>
+                        <option value="">Type</option>
+                        <option value="income">Income</option>
+                        <option value="expense">Expense</option>
+                    </select>
+                    <input type="date" name="occurred_on" required />
+                    <input type="text" name="notes" placeholder="Notes" />
+                    <button class="btn" type="submit">Save Record</button>
+                </form>
+            </div>
+
+            <div class="panel">
+                <h2>Finance Records</h2>
+                <div class="table-wrapper">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Title</th>
+                                <th>Category</th>
+                                <th>Type</th>
+                                <th>Amount (NGN)</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <% if (!records.length) { %>
+                                <tr>
+                                    <td colspan="6">No finance records yet.</td>
+                                </tr>
+                                <% } %>
+                                    <% records.forEach((record)=> { %>
+                                        <tr>
+                                            <td>
+                                                <%= record.occurred_on %>
+                                            </td>
+                                            <td>
+                                                <%= record.title %>
+                                            </td>
+                                            <td>
+                                                <%= record.category %>
+                                            </td>
+                                            <td><span class="badge <%= record.type %>">
+                                                    <%= record.type %>
+                                                </span></td>
+                                            <td>
+                                                <%= Number(record.amount).toLocaleString('en-NG') %>
+                                            </td>
+                                            <td>
+                                                <form action="/dashboard/finance/<%= record.id %>/delete" method="POST"
+                                                    onsubmit="return confirm('Delete this record?');">
+                                                    <button class="btn btn-danger" type="submit">Delete</button>
+                                                </form>
+                                            </td>
+                                        </tr>
+                                        <% }) %>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </main>
+
+        <%- include('partials/adminFooter') %>

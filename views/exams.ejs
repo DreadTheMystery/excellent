@@ -1,0 +1,75 @@
+<%- include('partials/adminHeader', { title: 'Exams' }) %>
+    <%- include('partials/adminNav', { title: 'Exams' }) %>
+
+        <main class="container section">
+            <div class="panel">
+                <h2>Create Exam/Test</h2>
+                <form action="/dashboard/exams" method="POST" class="form grid-form">
+                    <input type="text" name="name" placeholder="Exam/Test Name" required />
+                    <input type="text" name="term" placeholder="Term (First/Second/Third)" required />
+                    <input type="text" name="session" placeholder="Session (e.g. 2026/2027)" required />
+                    <select name="class_name" required>
+                        <option value="">Class</option>
+                        <% classOptions.forEach((className)=> { %>
+                            <option value="<%= className %>">
+                                <%= className %>
+                            </option>
+                            <% }) %>
+                    </select>
+                    <input type="date" name="exam_date" required />
+                    <button class="btn" type="submit">Save Exam</button>
+                </form>
+            </div>
+
+            <div class="panel">
+                <h2>Exam List</h2>
+                <div class="table-wrapper">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Term</th>
+                                <th>Session</th>
+                                <th>Class</th>
+                                <th>Date</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <% if (!exams.length) { %>
+                                <tr>
+                                    <td colspan="6">No exams yet.</td>
+                                </tr>
+                                <% } %>
+                                    <% exams.forEach((exam)=> { %>
+                                        <tr>
+                                            <td>
+                                                <%= exam.name %>
+                                            </td>
+                                            <td>
+                                                <%= exam.term %>
+                                            </td>
+                                            <td>
+                                                <%= exam.session %>
+                                            </td>
+                                            <td>
+                                                <%= exam.class_name %>
+                                            </td>
+                                            <td>
+                                                <%= exam.exam_date %>
+                                            </td>
+                                            <td>
+                                                <form action="/dashboard/exams/<%= exam.id %>/delete" method="POST"
+                                                    onsubmit="return confirm('Delete this exam?');">
+                                                    <button class="btn btn-danger" type="submit">Delete</button>
+                                                </form>
+                                            </td>
+                                        </tr>
+                                        <% }) %>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </main>
+
+        <%- include('partials/adminFooter') %>

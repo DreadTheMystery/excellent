@@ -1,0 +1,78 @@
+<%- include('partials/adminHeader', { title: 'Dashboard' }) %>
+    <%- include('partials/adminNav', { title: 'Dashboard' }) %>
+
+        <main class="container section">
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-icon"><i class="ri-user-smile-line"></i></div>
+                    <div>
+                        <p>Students</p>
+                        <h2>
+                            <%= stats.students %>
+                        </h2>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon"><i class="ri-presentation-line"></i></div>
+                    <div>
+                        <p>Teachers</p>
+                        <h2>
+                            <%= stats.teachers %>
+                        </h2>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon"><i class="ri-message-3-line"></i></div>
+                    <div>
+                        <p>Inquiries</p>
+                        <h2>
+                            <%= stats.inquiries %>
+                        </h2>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon"><i class="ri-file-list-3-line"></i></div>
+                    <div>
+                        <p>Exams</p>
+                        <h2>
+                            <%= stats.exams %>
+                        </h2>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon"><i class="ri-bar-chart-grouped-line"></i></div>
+                    <div>
+                        <p>Results</p>
+                        <h2>
+                            <%= stats.results %>
+                        </h2>
+                    </div>
+                </div>
+                <div class="stat-card highlight-success">
+                    <div class="stat-icon"><i class="ri-wallet-3-line"></i></div>
+                    <div>
+                        <p>Total Income</p>
+                        <h2>₦<%= stats.income.toLocaleString('en-NG') %>
+                        </h2>
+                    </div>
+                </div>
+                <div class="stat-card highlight-danger">
+                    <div class="stat-icon"><i class="ri-funds-line"></i></div>
+                    <div>
+                        <p>Total Expense</p>
+                        <h2>₦<%= stats.expense.toLocaleString('en-NG') %>
+                        </h2>
+                    </div>
+                </div>
+                <div class="stat-card highlight-warning">
+                    <div class="stat-icon"><i class="ri-hand-coin-line"></i></div>
+                    <div>
+                        <p>Outstanding Fees</p>
+                        <h2>₦<%= (stats.outstanding || 0).toLocaleString('en-NG') %>
+                        </h2>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <%- include('partials/adminFooter') %>

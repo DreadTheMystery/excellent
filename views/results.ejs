@@ -1,0 +1,89 @@
+<%- include('partials/adminHeader', { title: 'Results' }) %>
+    <%- include('partials/adminNav', { title: 'Results' }) %>
+
+        <main class="container section">
+            <div class="panel">
+                <h2>Record Result</h2>
+                <form action="/dashboard/results" method="POST" class="form grid-form">
+                    <select name="student_id" required>
+                        <option value="">Select Student</option>
+                        <% students.forEach((student)=> { %>
+                            <option value="<%= student.id %>">
+                                <%= student.first_name %>
+                                    <%= student.last_name %>
+                            </option>
+                            <% }) %>
+                    </select>
+                    <select name="exam_id" required>
+                        <option value="">Select Exam</option>
+                        <% exams.forEach((exam)=> { %>
+                            <option value="<%= exam.id %>">
+                                <%= exam.name %> - <%= exam.class_name %>
+                            </option>
+                            <% }) %>
+                    </select>
+                    <input type="text" name="subject" placeholder="Subject" required />
+                    <input type="number" name="score" step="0.01" placeholder="Score" required />
+                    <input type="text" name="grade" placeholder="Grade (A1, B2)" required />
+                    <input type="text" name="remark" placeholder="Remark" />
+                    <button class="btn" type="submit">Save Result</button>
+                </form>
+            </div>
+
+            <div class="panel">
+                <h2>Results Archive</h2>
+                <div class="table-wrapper">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Student</th>
+                                <th>Exam</th>
+                                <th>Subject</th>
+                                <th>Score</th>
+                                <th>Grade</th>
+                                <th>Remark</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <% if (!results.length) { %>
+                                <tr>
+                                    <td colspan="7">No results yet.</td>
+                                </tr>
+                                <% } %>
+                                    <% results.forEach((result)=> { %>
+                                        <tr>
+                                            <td>
+                                                <%= result.first_name %>
+                                                    <%= result.last_name %>
+                                            </td>
+                                            <td>
+                                                <%= result.exam_name %>
+                                            </td>
+                                            <td>
+                                                <%= result.subject %>
+                                            </td>
+                                            <td>
+                                                <%= result.score %>
+                                            </td>
+                                            <td>
+                                                <%= result.grade %>
+                                            </td>
+                                            <td>
+                                                <%= result.remark || '-' %>
+                                            </td>
+                                            <td>
+                                                <form action="/dashboard/results/<%= result.id %>/delete" method="POST"
+                                                    onsubmit="return confirm('Delete this result?');">
+                                                    <button class="btn btn-danger" type="submit">Delete</button>
+                                                </form>
+                                            </td>
+                                        </tr>
+                                        <% }) %>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </main>
+
+        <%- include('partials/adminFooter') %>

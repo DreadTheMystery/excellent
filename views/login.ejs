@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Owner Login | Excellence Academy</title>
+    <link rel="stylesheet" href="/styles.css" />
+</head>
+
+<body class="admin-body">
+    <main class="login-page">
+        <div class="login-card">
+            <h1>Owner Login</h1>
+            <p>Access the school management console.</p>
+            <% if (error) { %>
+                <div class="alert error">
+                    <%= error %>
+                </div>
+                <% } %>
+                    <form action="/login" method="POST" class="form">
+                        <input type="email" name="email" placeholder="Email Address" required />
+                        <input type="password" name="password" placeholder="Password" required />
+                        <button class="btn" type="submit">Sign In</button>
+                    </form>
+                    <p class="login-note">Default owner credentials are seeded on first run.</p>
+        </div>
+    </main>
+</body>
+
+</html>

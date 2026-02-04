@@ -1,0 +1,19 @@
+{
+  "name": "excellence-academy",
+  "version": "1.0.0",
+  "description": "Fullstack school website for a Nigeria-based academy",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "author": "Excellence Academy",
+  "license": "MIT",
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "ejs": "^3.1.10",
+    "express": "^4.19.2",
+    "express-session": "^1.17.3",
+    "sqlite3": "^5.1.7"
+  }
+}
