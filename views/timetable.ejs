@@ -1,0 +1,89 @@
+<%- include('partials/adminHeader', { title: 'Timetable' }) %>
+  <%- include('partials/adminNav', { title: 'Timetable' }) %>
+
+    <main class="container section">
+      <div class="panel">
+        <h2>Create Timetable Entry</h2>
+        <form action="/dashboard/timetable" method="POST" class="form grid-form">
+          <select name="class_name" required>
+            <option value="">Class</option>
+            <% classOptions.forEach((className)=> { %>
+              <option value="<%= className %>">
+                <%= className %>
+              </option>
+              <% }) %>
+          </select>
+          <select name="day" required>
+            <option value="">Day</option>
+            <option>Monday</option>
+            <option>Tuesday</option>
+            <option>Wednesday</option>
+            <option>Thursday</option>
+            <option>Friday</option>
+          </select>
+          <input type="text" name="period" placeholder="Period (e.g. 9:00 - 10:00)" required />
+          <input type="text" name="subject" placeholder="Subject" required />
+          <select name="teacher_name">
+            <option value="">Teacher (optional)</option>
+            <% teachers.forEach((teacher)=> { %>
+              <option value="<%= teacher.name %>">
+                <%= teacher.name %>
+              </option>
+              <% }) %>
+          </select>
+          <button class="btn" type="submit">Add Entry</button>
+        </form>
+      </div>
+
+      <div class="panel">
+        <h2>Timetable Entries</h2>
+        <div class="table-wrapper">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Class</th>
+                <th>Day</th>
+                <th>Period</th>
+                <th>Subject</th>
+                <th>Teacher</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% if (!timetables.length) { %>
+                <tr>
+                  <td colspan="6">No timetable entries yet.</td>
+                </tr>
+                <% } %>
+                  <% timetables.forEach((item)=> { %>
+                    <tr>
+                      <td>
+                        <%= item.class_name %>
+                      </td>
+                      <td>
+                        <%= item.day %>
+                      </td>
+                      <td>
+                        <%= item.period %>
+                      </td>
+                      <td>
+                        <%= item.subject %>
+                      </td>
+                      <td>
+                        <%= item.teacher_name || '-' %>
+                      </td>
+                      <td>
+                        <form action="/dashboard/timetable/<%= item.id %>/delete" method="POST"
+                          onsubmit="return confirm('Delete this entry?');">
+                          <button class="btn btn-danger" type="submit">Delete</button>
+                        </form>
+                      </td>
+                    </tr>
+                    <% }) %>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </main>
+
+    <%- include('partials/adminFooter') %>

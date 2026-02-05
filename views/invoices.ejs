@@ -1,0 +1,150 @@
+<%- include('partials/adminHeader', { title: 'Invoices' }) %>
+  <%- include('partials/adminNav', { title: 'Invoices' }) %>
+
+    <main class="container section">
+      <div class="panel">
+        <h2>Create Invoice</h2>
+        <form action="/dashboard/invoices" method="POST" class="form grid-form">
+          <select name="student_id" required>
+            <option value="">Select Student</option>
+            <% students.forEach((student)=> { %>
+              <option value="<%= student.id %>">
+                <%= student.first_name %>
+                  <%= student.last_name %> - <%= student.class_name %>
+              </option>
+              <% }) %>
+          </select>
+          <select name="fee_plan_id" required>
+            <option value="">Select Fee Plan</option>
+            <% plans.forEach((plan)=> { %>
+              <option value="<%= plan.id %>">
+                <%= plan.class_name %> - <%= plan.term %> - <%= plan.session %>
+              </option>
+              <% }) %>
+          </select>
+          <input type="date" name="due_date" value="<%= today %>" required />
+          <button class="btn" type="submit">Create Invoice</button>
+        </form>
+      </div>
+
+      <div class="panel">
+        <h2>Arrears Alerts</h2>
+        <div class="table-wrapper">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Student</th>
+                <th>Class</th>
+                <th>Due Date</th>
+                <th>Balance (NGN)</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% if (!arrears.length) { %>
+                <tr>
+                  <td colspan="5">No arrears found.</td>
+                </tr>
+                <% } %>
+                  <% arrears.forEach((invoice)=> { %>
+                    <tr>
+                      <td>
+                        <%= invoice.first_name %>
+                          <%= invoice.last_name %>
+                      </td>
+                      <td>
+                        <%= invoice.class_name %>
+                      </td>
+                      <td>
+                        <%= invoice.due_date %>
+                      </td>
+                      <td>
+                        <%= Number(invoice.total - invoice.discount - invoice.amount_paid).toLocaleString('en-NG') %>
+                      </td>
+                      <td><span class="badge badge-warning">
+                          <%= invoice.status %>
+                        </span></td>
+                    </tr>
+                    <% }) %>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>Invoices</h2>
+        <div class="table-wrapper">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Student</th>
+                <th>Class</th>
+                <th>Term</th>
+                <th>Session</th>
+                <th>Total (NGN)</th>
+                <th>Paid (NGN)</th>
+                <th>Balance (NGN)</th>
+                <th>Status</th>
+                <th>Due Date</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% if (!invoices.length) { %>
+                <tr>
+                  <td colspan="10">No invoices yet.</td>
+                </tr>
+                <% } %>
+                  <% invoices.forEach((invoice)=> { %>
+                    <tr>
+                      <td>
+                        <%= invoice.first_name %>
+                          <%= invoice.last_name %>
+                      </td>
+                      <td>
+                        <%= invoice.class_name %>
+                      </td>
+                      <td>
+                        <%= invoice.term %>
+                      </td>
+                      <td>
+                        <%= invoice.session %>
+                      </td>
+                      <td>
+                        <%= Number(invoice.total).toLocaleString('en-NG') %>
+                      </td>
+                      <td>
+                        <%= Number(invoice.amount_paid).toLocaleString('en-NG') %>
+                      </td>
+                      <td>
+                        <%= Number(invoice.total - invoice.discount - invoice.amount_paid).toLocaleString('en-NG') %>
+                      </td>
+                      <td><span class="badge badge-primary">
+                          <%= invoice.status %>
+                        </span></td>
+                      <td>
+                        <%= invoice.due_date %>
+                      </td>
+                      <td>
+                        <form action="/dashboard/invoices/<%= invoice.id %>/pay" method="POST" class="form"
+                          style="gap:0.5rem;">
+                          <input type="number" name="amount" step="0.01" placeholder="Amount" required />
+                          <input type="date" name="paid_on" value="<%= today %>" required />
+                          <input type="text" name="method" placeholder="Method" />
+                          <button class="btn" type="submit">Record Payment</button>
+                        </form>
+                        <a class="btn btn-light" href="/dashboard/invoices/<%= invoice.id %>/receipt">Receipt</a>
+                        <form action="/dashboard/invoices/<%= invoice.id %>/delete" method="POST"
+                          onsubmit="return confirm('Delete this invoice?');">
+                          <button class="btn btn-danger" type="submit">Delete</button>
+                        </form>
+                      </td>
+                    </tr>
+                    <% }) %>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </main>
+
+    <%- include('partials/adminFooter') %>

@@ -3,6 +3,7 @@ const express = require("express");
 const sqlite3 = require("sqlite3").verbose();
 const session = require("express-session");
 const bcrypt = require("bcryptjs");
+const PDFDocument = require("pdfkit");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -79,6 +80,9 @@ const CLASS_OPTIONS = [
   "SS 3A",
   "SS 3B"
 ];
+
+const ROLE_OPTIONS = ["owner", "admin", "teacher", "accountant"];
+const ROLE_SET = new Set(ROLE_OPTIONS);
 
 const initDb = () => {
   db.serialize(() => {
@@ -180,6 +184,102 @@ const initDb = () => {
         FOREIGN KEY(student_id) REFERENCES students(id)
       )`
     );
+    db.run(
+      `CREATE TABLE IF NOT EXISTS assessments (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        student_id INTEGER NOT NULL,
+        class_name TEXT NOT NULL,
+        term TEXT NOT NULL,
+        session TEXT NOT NULL,
+        subject TEXT NOT NULL,
+        assessment_type TEXT NOT NULL,
+        score REAL NOT NULL,
+        created_at TEXT NOT NULL,
+        FOREIGN KEY(student_id) REFERENCES students(id)
+      )`
+    );
+    db.run(
+      `CREATE TABLE IF NOT EXISTS classes (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL UNIQUE,
+        capacity INTEGER NOT NULL,
+        class_teacher_id INTEGER,
+        created_at TEXT NOT NULL,
+        FOREIGN KEY(class_teacher_id) REFERENCES teachers(id)
+      )`
+    );
+    db.run(
+      `CREATE TABLE IF NOT EXISTS timetables (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        class_name TEXT NOT NULL,
+        day TEXT NOT NULL,
+        period TEXT NOT NULL,
+        subject TEXT NOT NULL,
+        teacher_name TEXT,
+        created_at TEXT NOT NULL
+      )`
+    );
+    db.run(
+      `CREATE TABLE IF NOT EXISTS attendance_students (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        student_id INTEGER NOT NULL,
+        class_name TEXT NOT NULL,
+        attendance_date TEXT NOT NULL,
+        status TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        FOREIGN KEY(student_id) REFERENCES students(id)
+      )`
+    );
+    db.run(
+      `CREATE TABLE IF NOT EXISTS attendance_teachers (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        teacher_id INTEGER NOT NULL,
+        attendance_date TEXT NOT NULL,
+        status TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        FOREIGN KEY(teacher_id) REFERENCES teachers(id)
+      )`
+    );
+    db.run(
+      `CREATE TABLE IF NOT EXISTS fee_plans (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        class_name TEXT NOT NULL,
+        term TEXT NOT NULL,
+        session TEXT NOT NULL,
+        amount REAL NOT NULL,
+        discount REAL NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL
+      )`
+    );
+    db.run(
+      `CREATE TABLE IF NOT EXISTS invoices (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        student_id INTEGER NOT NULL,
+        class_name TEXT NOT NULL,
+        term TEXT NOT NULL,
+        session TEXT NOT NULL,
+        fee_plan_id INTEGER,
+        total REAL NOT NULL,
+        discount REAL NOT NULL,
+        amount_paid REAL NOT NULL,
+        due_date TEXT NOT NULL,
+        status TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        FOREIGN KEY(student_id) REFERENCES students(id),
+        FOREIGN KEY(fee_plan_id) REFERENCES fee_plans(id)
+      )`
+    );
+    db.run(
+      `CREATE TABLE IF NOT EXISTS invoice_payments (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        invoice_id INTEGER NOT NULL,
+        amount REAL NOT NULL,
+        method TEXT,
+        paid_on TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        FOREIGN KEY(invoice_id) REFERENCES invoices(id)
+      )`
+    );
     db.run("ALTER TABLE teachers ADD COLUMN class_name TEXT", () => {});
     db.get("SELECT COUNT(*) as count FROM users", (err, row) => {
       if (err) return;
@@ -220,6 +320,20 @@ const requireAuth = (req, res, next) => {
   return res.redirect("/login");
 };
 
+const requireRole = (...roles) => (req, res, next) => {
+  if (!req.session.user) return res.redirect("/login");
+  if (!roles.includes(req.session.user.role)) {
+    return res.status(403).render("forbidden");
+  }
+  return next();
+};
+
+const getTeacherClass = async (user) => {
+  if (!user || user.role !== "teacher") return null;
+  const teacher = await dbGet("SELECT class_name FROM teachers WHERE email = ?", [user.email]);
+  return teacher && teacher.class_name ? teacher.class_name : null;
+};
+
 app.get("/", (req, res) => {
   const success = req.query.success === "1";
   res.render("index", { success });
@@ -240,7 +354,7 @@ app.post("/login", async (req, res) => {
     if (!user) return res.redirect("/login?error=1");
     const isValid = bcrypt.compareSync(password, user.password_hash);
     if (!isValid) return res.redirect("/login?error=1");
-    req.session.user = { id: user.id, name: user.name, role: user.role };
+    req.session.user = { id: user.id, name: user.name, role: user.role, email: user.email };
     return res.redirect("/dashboard");
   } catch (err) {
     return res.redirect("/login?error=1");
@@ -289,7 +403,7 @@ app.post("/contact", (req, res) => {
   );
 });
 
-app.get("/admin", requireAuth, (req, res) => {
+app.get("/admin", requireRole("owner", "admin"), (req, res) => {
   db.all("SELECT * FROM inquiries ORDER BY id DESC LIMIT 100", (err, rows) => {
     if (err) {
       return res.status(500).send("Failed to load inquiries");
@@ -302,7 +416,7 @@ app.get("/admin", requireAuth, (req, res) => {
   });
 });
 
-app.get("/dashboard", requireAuth, async (req, res) => {
+app.get("/dashboard", requireRole("owner", "admin", "teacher", "accountant"), async (req, res) => {
   try {
     const [students, teachers, inquiries, exams, results] = await Promise.all([
       dbGet("SELECT COUNT(*) as count FROM students"),
@@ -337,16 +451,136 @@ app.get("/dashboard", requireAuth, async (req, res) => {
   }
 });
 
-app.get("/dashboard/students", requireAuth, async (req, res) => {
+app.get("/dashboard/students", requireRole("owner", "admin", "teacher"), async (req, res) => {
   try {
-    const students = await dbAll("SELECT * FROM students ORDER BY id DESC");
-    res.render("students", { students, classOptions: CLASS_OPTIONS });
+    const teacherClass = await getTeacherClass(req.session.user);
+    if (req.session.user.role === "teacher" && !teacherClass) {
+      return res.status(403).render("forbidden");
+    }
+    const [students, teachers] = await Promise.all([
+      req.session.user.role === "teacher" && teacherClass
+        ? dbAll("SELECT * FROM students WHERE class_name = ? ORDER BY id DESC", [teacherClass])
+        : dbAll("SELECT * FROM students ORDER BY id DESC"),
+      dbAll("SELECT name, class_name FROM teachers WHERE class_name IS NOT NULL AND class_name <> ''")
+    ]);
+    const classTeachers = teachers.reduce((acc, teacher) => {
+      if (!acc[teacher.class_name]) acc[teacher.class_name] = [];
+      acc[teacher.class_name].push(teacher.name);
+      return acc;
+    }, {});
+    res.render("students", {
+      students,
+      classOptions: req.session.user.role === "teacher" && teacherClass ? [teacherClass] : CLASS_OPTIONS,
+      classTeachers
+    });
   } catch (err) {
     res.status(500).send("Failed to load students");
   }
 });
 
-app.post("/dashboard/students", requireAuth, async (req, res) => {
+app.get("/dashboard/classes", requireRole("owner"), async (req, res) => {
+  try {
+    const existing = await dbGet("SELECT COUNT(*) as count FROM classes");
+    if (existing.count === 0) {
+      for (const className of CLASS_OPTIONS) {
+        await dbRun(
+          "INSERT INTO classes (name, capacity, class_teacher_id, created_at) VALUES (?, ?, ?, ?)",
+          [className, 30, null, new Date().toISOString()]
+        );
+      }
+    }
+    const [classes, teachers] = await Promise.all([
+      dbAll(
+        `SELECT classes.*, teachers.name as teacher_name
+         FROM classes
+         LEFT JOIN teachers ON teachers.id = classes.class_teacher_id
+         ORDER BY classes.name`
+      ),
+      dbAll("SELECT id, name FROM teachers ORDER BY name")
+    ]);
+    res.render("classes", { classes, teachers, classOptions: CLASS_OPTIONS });
+  } catch (err) {
+    res.status(500).send("Failed to load classes");
+  }
+});
+
+app.get("/teacher", requireRole("owner", "admin", "teacher"), async (req, res) => {
+  try {
+    const teacherClass = await getTeacherClass(req.session.user);
+    if (req.session.user.role === "teacher" && !teacherClass) {
+      return res.status(403).render("forbidden");
+    }
+    const [students, assessments] = await Promise.all([
+      req.session.user.role === "teacher" && teacherClass
+        ? dbAll("SELECT id, first_name, last_name, class_name FROM students WHERE class_name = ? ORDER BY first_name", [teacherClass])
+        : dbAll("SELECT id, first_name, last_name, class_name FROM students ORDER BY first_name"),
+      dbAll(
+        `SELECT assessments.*, students.first_name, students.last_name
+         FROM assessments
+         JOIN students ON students.id = assessments.student_id
+         ${req.session.user.role === "teacher" && teacherClass ? "WHERE assessments.class_name = ?" : ""}
+         ORDER BY assessments.id DESC LIMIT 100`,
+        req.session.user.role === "teacher" && teacherClass ? [teacherClass] : []
+      )
+    ]);
+    res.render("teacher", {
+      students,
+      assessments,
+      classOptions: req.session.user.role === "teacher" && teacherClass ? [teacherClass] : CLASS_OPTIONS
+    });
+  } catch (err) {
+    res.status(500).send("Failed to load teacher workspace");
+  }
+});
+
+app.post("/teacher/assessments", requireRole("owner", "admin", "teacher"), async (req, res) => {
+  const { student_id, class_name, term, session, subject, assessment_type, score } = req.body;
+  if (!student_id || !class_name || !term || !session || !subject || !assessment_type || !score) {
+    return res.status(400).send("Missing assessment fields");
+  }
+  if (req.session.user.role === "teacher") {
+    const teacherClass = await getTeacherClass(req.session.user);
+    if (teacherClass && class_name !== teacherClass) {
+      return res.status(403).render("forbidden");
+    }
+  }
+  await dbRun(
+    `INSERT INTO assessments (student_id, class_name, term, session, subject, assessment_type, score, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      student_id,
+      class_name,
+      term.trim(),
+      session.trim(),
+      subject.trim(),
+      assessment_type.trim(),
+      Number(score),
+      new Date().toISOString()
+    ]
+  );
+  res.redirect("/teacher");
+});
+
+app.post("/dashboard/classes", requireRole("owner"), async (req, res) => {
+  const { class_id, capacity, class_teacher_id } = req.body;
+  if (!class_id || !capacity) {
+    return res.status(400).send("Missing class fields");
+  }
+  const classRow = await dbGet("SELECT name FROM classes WHERE id = ?", [class_id]);
+  await dbRun(
+    "UPDATE classes SET capacity = ?, class_teacher_id = ? WHERE id = ?",
+    [Number(capacity), class_teacher_id || null, class_id]
+  );
+  if (classRow && classRow.name) {
+    await dbRun("UPDATE teachers SET class_name = NULL WHERE class_name = ?", [classRow.name]);
+    if (class_teacher_id) {
+      await dbRun("UPDATE teachers SET class_name = ? WHERE id = ?", [classRow.name, class_teacher_id]);
+    }
+  }
+  res.redirect("/dashboard/classes");
+});
+
+app.post("/dashboard/students", requireRole("owner", "admin", "teacher"), async (req, res) => {
   const { first_name, last_name, gender, dob, class_name, guardian_name, guardian_phone, address } = req.body;
   if (!first_name || !last_name || !gender || !dob || !class_name || !guardian_name || !guardian_phone) {
     return res.status(400).send("Missing student fields");
@@ -369,12 +603,12 @@ app.post("/dashboard/students", requireAuth, async (req, res) => {
   res.redirect("/dashboard/students");
 });
 
-app.post("/dashboard/students/:id/delete", requireAuth, async (req, res) => {
+app.post("/dashboard/students/:id/delete", requireRole("owner", "admin"), async (req, res) => {
   await dbRun("DELETE FROM students WHERE id = ?", [req.params.id]);
   res.redirect("/dashboard/students");
 });
 
-app.get("/dashboard/teachers", requireAuth, async (req, res) => {
+app.get("/dashboard/teachers", requireRole("owner", "admin"), async (req, res) => {
   try {
     const teachers = await dbAll("SELECT * FROM teachers ORDER BY id DESC");
     res.render("teachers", { teachers, classOptions: CLASS_OPTIONS });
@@ -383,7 +617,7 @@ app.get("/dashboard/teachers", requireAuth, async (req, res) => {
   }
 });
 
-app.post("/dashboard/teachers", requireAuth, async (req, res) => {
+app.post("/dashboard/teachers", requireRole("owner", "admin"), async (req, res) => {
   const { name, email, phone, subject, class_name, qualification } = req.body;
   if (!name || !email || !phone || !subject) {
     return res.status(400).send("Missing teacher fields");
@@ -404,12 +638,139 @@ app.post("/dashboard/teachers", requireAuth, async (req, res) => {
   res.redirect("/dashboard/teachers");
 });
 
-app.post("/dashboard/teachers/:id/delete", requireAuth, async (req, res) => {
+app.post("/dashboard/teachers/:id/delete", requireRole("owner", "admin"), async (req, res) => {
   await dbRun("DELETE FROM teachers WHERE id = ?", [req.params.id]);
   res.redirect("/dashboard/teachers");
 });
 
-app.get("/dashboard/finance", requireAuth, async (req, res) => {
+app.get("/dashboard/timetable", requireRole("owner", "admin", "teacher"), async (req, res) => {
+  try {
+    const teacherClass = await getTeacherClass(req.session.user);
+    if (req.session.user.role === "teacher" && !teacherClass) {
+      return res.status(403).render("forbidden");
+    }
+    const [timetables, teachers] = await Promise.all([
+      req.session.user.role === "teacher" && teacherClass
+        ? dbAll("SELECT * FROM timetables WHERE class_name = ? ORDER BY day, period", [teacherClass])
+        : dbAll("SELECT * FROM timetables ORDER BY class_name, day, period"),
+      dbAll("SELECT name FROM teachers ORDER BY name")
+    ]);
+    res.render("timetable", {
+      timetables,
+      classOptions: req.session.user.role === "teacher" && teacherClass ? [teacherClass] : CLASS_OPTIONS,
+      teachers
+    });
+  } catch (err) {
+    res.status(500).send("Failed to load timetable");
+  }
+});
+
+app.post("/dashboard/timetable", requireRole("owner", "admin", "teacher"), async (req, res) => {
+  const { class_name, day, period, subject, teacher_name } = req.body;
+  const teacherClass = await getTeacherClass(req.session.user);
+  const finalClass = req.session.user.role === "teacher" && teacherClass ? teacherClass : class_name;
+  if (!finalClass || !day || !period || !subject) {
+    return res.status(400).send("Missing timetable fields");
+  }
+  await dbRun(
+    `INSERT INTO timetables (class_name, day, period, subject, teacher_name, created_at)
+     VALUES (?, ?, ?, ?, ?, ?)`,
+    [finalClass, day, period.trim(), subject.trim(), teacher_name || "", new Date().toISOString()]
+  );
+  res.redirect("/dashboard/timetable");
+});
+
+app.post("/dashboard/timetable/:id/delete", requireRole("owner", "admin"), async (req, res) => {
+  await dbRun("DELETE FROM timetables WHERE id = ?", [req.params.id]);
+  res.redirect("/dashboard/timetable");
+});
+
+app.get("/dashboard/attendance/students", requireRole("owner", "admin", "teacher"), async (req, res) => {
+  try {
+    const date = req.query.date || new Date().toISOString().slice(0, 10);
+    const teacherClass = await getTeacherClass(req.session.user);
+    if (req.session.user.role === "teacher" && !teacherClass) {
+      return res.status(403).render("forbidden");
+    }
+    const [students, records] = await Promise.all([
+      req.session.user.role === "teacher" && teacherClass
+        ? dbAll(
+            "SELECT id, first_name, last_name, class_name FROM students WHERE class_name = ? ORDER BY first_name",
+            [teacherClass]
+          )
+        : dbAll("SELECT id, first_name, last_name, class_name FROM students ORDER BY first_name"),
+      dbAll(
+        `SELECT attendance_students.*, students.first_name, students.last_name
+         FROM attendance_students
+         JOIN students ON students.id = attendance_students.student_id
+         WHERE attendance_date = ?
+         ${req.session.user.role === "teacher" && teacherClass ? "AND attendance_students.class_name = ?" : ""}
+         ORDER BY students.first_name`,
+        req.session.user.role === "teacher" && teacherClass ? [date, teacherClass] : [date]
+      )
+    ]);
+    res.render("attendance-students", {
+      students,
+      records,
+      date,
+      classOptions: req.session.user.role === "teacher" && teacherClass ? [teacherClass] : CLASS_OPTIONS
+    });
+  } catch (err) {
+    res.status(500).send("Failed to load student attendance");
+  }
+});
+
+app.post("/dashboard/attendance/students", requireRole("owner", "admin", "teacher"), async (req, res) => {
+  const { student_id, class_name, attendance_date, status } = req.body;
+  if (!student_id || !class_name || !attendance_date || !status) {
+    return res.status(400).send("Missing attendance fields");
+  }
+  const teacherClass = await getTeacherClass(req.session.user);
+  if (req.session.user.role === "teacher" && teacherClass && class_name !== teacherClass) {
+    return res.status(403).render("forbidden");
+  }
+  await dbRun(
+    `INSERT INTO attendance_students (student_id, class_name, attendance_date, status, created_at)
+     VALUES (?, ?, ?, ?, ?)`,
+    [student_id, class_name, attendance_date, status, new Date().toISOString()]
+  );
+  res.redirect(`/dashboard/attendance/students?date=${attendance_date}`);
+});
+
+app.get("/dashboard/attendance/teachers", requireRole("owner", "admin", "teacher"), async (req, res) => {
+  try {
+    const date = req.query.date || new Date().toISOString().slice(0, 10);
+    const [teachers, records] = await Promise.all([
+      dbAll("SELECT id, name FROM teachers ORDER BY name"),
+      dbAll(
+        `SELECT attendance_teachers.*, teachers.name
+         FROM attendance_teachers
+         JOIN teachers ON teachers.id = attendance_teachers.teacher_id
+         WHERE attendance_date = ?
+         ORDER BY teachers.name`,
+        [date]
+      )
+    ]);
+    res.render("attendance-teachers", { teachers, records, date });
+  } catch (err) {
+    res.status(500).send("Failed to load teacher attendance");
+  }
+});
+
+app.post("/dashboard/attendance/teachers", requireRole("owner", "admin", "teacher"), async (req, res) => {
+  const { teacher_id, attendance_date, status } = req.body;
+  if (!teacher_id || !attendance_date || !status) {
+    return res.status(400).send("Missing attendance fields");
+  }
+  await dbRun(
+    `INSERT INTO attendance_teachers (teacher_id, attendance_date, status, created_at)
+     VALUES (?, ?, ?, ?)`,
+    [teacher_id, attendance_date, status, new Date().toISOString()]
+  );
+  res.redirect(`/dashboard/attendance/teachers?date=${attendance_date}`);
+});
+
+app.get("/dashboard/finance", requireRole("owner", "admin", "accountant"), async (req, res) => {
   try {
     const records = await dbAll("SELECT * FROM finance_records ORDER BY occurred_on DESC, id DESC");
     res.render("finance", { records });
@@ -418,7 +779,7 @@ app.get("/dashboard/finance", requireAuth, async (req, res) => {
   }
 });
 
-app.post("/dashboard/finance", requireAuth, async (req, res) => {
+app.post("/dashboard/finance", requireRole("owner", "admin", "accountant"), async (req, res) => {
   const { title, category, amount, type, occurred_on, notes } = req.body;
   if (!title || !category || !amount || !type || !occurred_on) {
     return res.status(400).send("Missing finance fields");
@@ -431,50 +792,202 @@ app.post("/dashboard/finance", requireAuth, async (req, res) => {
   res.redirect("/dashboard/finance");
 });
 
-app.post("/dashboard/finance/:id/delete", requireAuth, async (req, res) => {
+app.post("/dashboard/finance/:id/delete", requireRole("owner", "admin"), async (req, res) => {
   await dbRun("DELETE FROM finance_records WHERE id = ?", [req.params.id]);
   res.redirect("/dashboard/finance");
 });
 
-app.get("/dashboard/exams", requireAuth, async (req, res) => {
+app.get("/dashboard/fee-plans", requireRole("owner", "admin", "accountant"), async (req, res) => {
   try {
-    const exams = await dbAll("SELECT * FROM exams ORDER BY exam_date DESC, id DESC");
-    res.render("exams", { exams, classOptions: CLASS_OPTIONS });
+    const plans = await dbAll("SELECT * FROM fee_plans ORDER BY id DESC");
+    res.render("fee-plans", { plans, classOptions: CLASS_OPTIONS });
+  } catch (err) {
+    res.status(500).send("Failed to load fee plans");
+  }
+});
+
+app.post("/dashboard/fee-plans", requireRole("owner", "admin", "accountant"), async (req, res) => {
+  const { class_name, term, session, amount, discount } = req.body;
+  if (!class_name || !term || !session || !amount) {
+    return res.status(400).send("Missing fee plan fields");
+  }
+  await dbRun(
+    `INSERT INTO fee_plans (class_name, term, session, amount, discount, created_at)
+     VALUES (?, ?, ?, ?, ?, ?)`,
+    [class_name, term.trim(), session.trim(), Number(amount), Number(discount || 0), new Date().toISOString()]
+  );
+  res.redirect("/dashboard/fee-plans");
+});
+
+app.post("/dashboard/fee-plans/:id/delete", requireRole("owner", "admin"), async (req, res) => {
+  await dbRun("DELETE FROM fee_plans WHERE id = ?", [req.params.id]);
+  res.redirect("/dashboard/fee-plans");
+});
+
+app.get("/dashboard/invoices", requireRole("owner", "admin", "accountant"), async (req, res) => {
+  try {
+    const [invoices, students, plans] = await Promise.all([
+      dbAll(
+        `SELECT invoices.*, students.first_name, students.last_name
+         FROM invoices
+         JOIN students ON students.id = invoices.student_id
+         ORDER BY invoices.id DESC`
+      ),
+      dbAll("SELECT id, first_name, last_name, class_name FROM students ORDER BY first_name"),
+      dbAll("SELECT * FROM fee_plans ORDER BY id DESC")
+    ]);
+    const today = new Date().toISOString().slice(0, 10);
+    const arrears = invoices.filter(
+      (invoice) => invoice.status !== "paid" && invoice.due_date < today
+    );
+    res.render("invoices", { invoices, students, plans, arrears, today });
+  } catch (err) {
+    res.status(500).send("Failed to load invoices");
+  }
+});
+
+app.post("/dashboard/invoices", requireRole("owner", "admin", "accountant"), async (req, res) => {
+  const { student_id, fee_plan_id, due_date } = req.body;
+  if (!student_id || !fee_plan_id || !due_date) {
+    return res.status(400).send("Missing invoice fields");
+  }
+  const plan = await dbGet("SELECT * FROM fee_plans WHERE id = ?", [fee_plan_id]);
+  if (!plan) {
+    return res.status(400).send("Invalid fee plan");
+  }
+  const total = Number(plan.amount);
+  const discount = Number(plan.discount || 0);
+  const amountPaid = 0;
+  const status = "unpaid";
+  await dbRun(
+    `INSERT INTO invoices (student_id, class_name, term, session, fee_plan_id, total, discount, amount_paid, due_date, status, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      student_id,
+      plan.class_name,
+      plan.term,
+      plan.session,
+      plan.id,
+      total,
+      discount,
+      amountPaid,
+      due_date,
+      status,
+      new Date().toISOString()
+    ]
+  );
+  res.redirect("/dashboard/invoices");
+});
+
+app.post("/dashboard/invoices/:id/pay", requireRole("owner", "admin", "accountant"), async (req, res) => {
+  const { amount, method, paid_on } = req.body;
+  if (!amount || !paid_on) {
+    return res.status(400).send("Missing payment fields");
+  }
+  const invoice = await dbGet("SELECT * FROM invoices WHERE id = ?", [req.params.id]);
+  if (!invoice) return res.status(404).send("Invoice not found");
+
+  const newPaid = Number(invoice.amount_paid) + Number(amount);
+  const balance = Number(invoice.total) - Number(invoice.discount) - newPaid;
+  const status = balance <= 0 ? "paid" : newPaid > 0 ? "partial" : "unpaid";
+
+  await dbRun(
+    "UPDATE invoices SET amount_paid = ?, status = ? WHERE id = ?",
+    [newPaid, status, req.params.id]
+  );
+  await dbRun(
+    `INSERT INTO invoice_payments (invoice_id, amount, method, paid_on, created_at)
+     VALUES (?, ?, ?, ?, ?)`,
+    [req.params.id, Number(amount), method || "", paid_on, new Date().toISOString()]
+  );
+  res.redirect("/dashboard/invoices");
+});
+
+app.get("/dashboard/invoices/:id/receipt", requireRole("owner", "admin", "accountant"), async (req, res) => {
+  const invoice = await dbGet(
+    `SELECT invoices.*, students.first_name, students.last_name
+     FROM invoices
+     JOIN students ON students.id = invoices.student_id
+     WHERE invoices.id = ?`,
+    [req.params.id]
+  );
+  if (!invoice) return res.status(404).send("Invoice not found");
+  const payments = await dbAll(
+    "SELECT * FROM invoice_payments WHERE invoice_id = ? ORDER BY paid_on DESC",
+    [req.params.id]
+  );
+  res.render("receipt", { invoice, payments });
+});
+
+app.post("/dashboard/invoices/:id/delete", requireRole("owner", "admin"), async (req, res) => {
+  await dbRun("DELETE FROM invoice_payments WHERE invoice_id = ?", [req.params.id]);
+  await dbRun("DELETE FROM invoices WHERE id = ?", [req.params.id]);
+  res.redirect("/dashboard/invoices");
+});
+
+app.get("/dashboard/exams", requireRole("owner", "admin", "teacher"), async (req, res) => {
+  try {
+    const teacherClass = await getTeacherClass(req.session.user);
+    if (req.session.user.role === "teacher" && !teacherClass) {
+      return res.status(403).render("forbidden");
+    }
+    const exams = await dbAll(
+      req.session.user.role === "teacher" && teacherClass
+        ? "SELECT * FROM exams WHERE class_name = ? ORDER BY exam_date DESC, id DESC"
+        : "SELECT * FROM exams ORDER BY exam_date DESC, id DESC",
+      req.session.user.role === "teacher" && teacherClass ? [teacherClass] : []
+    );
+    res.render("exams", {
+      exams,
+      classOptions: req.session.user.role === "teacher" && teacherClass ? [teacherClass] : CLASS_OPTIONS
+    });
   } catch (err) {
     res.status(500).send("Failed to load exams");
   }
 });
 
-app.post("/dashboard/exams", requireAuth, async (req, res) => {
+app.post("/dashboard/exams", requireRole("owner", "admin", "teacher"), async (req, res) => {
   const { name, term, session, class_name, exam_date } = req.body;
-  if (!name || !term || !session || !class_name || !exam_date) {
+  const teacherClass = await getTeacherClass(req.session.user);
+  const finalClass = req.session.user.role === "teacher" && teacherClass ? teacherClass : class_name;
+  if (!name || !term || !session || !finalClass || !exam_date) {
     return res.status(400).send("Missing exam fields");
   }
   await dbRun(
     `INSERT INTO exams (name, term, session, class_name, exam_date, created_at)
      VALUES (?, ?, ?, ?, ?, ?)`,
-    [name.trim(), term.trim(), session.trim(), class_name.trim(), exam_date, new Date().toISOString()]
+    [name.trim(), term.trim(), session.trim(), finalClass.trim(), exam_date, new Date().toISOString()]
   );
   res.redirect("/dashboard/exams");
 });
 
-app.post("/dashboard/exams/:id/delete", requireAuth, async (req, res) => {
+app.post("/dashboard/exams/:id/delete", requireRole("owner", "admin"), async (req, res) => {
   await dbRun("DELETE FROM exams WHERE id = ?", [req.params.id]);
   res.redirect("/dashboard/exams");
 });
 
-app.get("/dashboard/results", requireAuth, async (req, res) => {
+app.get("/dashboard/results", requireRole("owner", "admin", "teacher"), async (req, res) => {
   try {
+    const teacherClass = await getTeacherClass(req.session.user);
+    if (req.session.user.role === "teacher" && !teacherClass) {
+      return res.status(403).render("forbidden");
+    }
     const [results, students, exams] = await Promise.all([
       dbAll(
         `SELECT results.*, students.first_name, students.last_name, exams.name as exam_name
          FROM results
          JOIN students ON students.id = results.student_id
          JOIN exams ON exams.id = results.exam_id
-         ORDER BY results.id DESC`
+         ${req.session.user.role === "teacher" && teacherClass ? "WHERE students.class_name = ?" : ""}
+         ORDER BY results.id DESC`,
+        req.session.user.role === "teacher" && teacherClass ? [teacherClass] : []
       ),
-      dbAll("SELECT id, first_name, last_name FROM students ORDER BY first_name"),
-      dbAll("SELECT id, name, class_name FROM exams ORDER BY exam_date DESC")
+      req.session.user.role === "teacher" && teacherClass
+        ? dbAll("SELECT id, first_name, last_name FROM students WHERE class_name = ? ORDER BY first_name", [teacherClass])
+        : dbAll("SELECT id, first_name, last_name FROM students ORDER BY first_name"),
+      req.session.user.role === "teacher" && teacherClass
+        ? dbAll("SELECT id, name, class_name FROM exams WHERE class_name = ? ORDER BY exam_date DESC", [teacherClass])
+        : dbAll("SELECT id, name, class_name FROM exams ORDER BY exam_date DESC")
     ]);
     res.render("results", { results, students, exams });
   } catch (err) {
@@ -482,10 +995,125 @@ app.get("/dashboard/results", requireAuth, async (req, res) => {
   }
 });
 
-app.post("/dashboard/results", requireAuth, async (req, res) => {
+app.get("/dashboard/report-cards", requireRole("owner", "admin", "teacher"), async (req, res) => {
+  try {
+    const teacherClass = await getTeacherClass(req.session.user);
+    const students = await dbAll(
+      req.session.user.role === "teacher" && teacherClass
+        ? "SELECT id, first_name, last_name, class_name FROM students WHERE class_name = ? ORDER BY first_name"
+        : "SELECT id, first_name, last_name, class_name FROM students ORDER BY first_name",
+      req.session.user.role === "teacher" && teacherClass ? [teacherClass] : []
+    );
+    res.render("report-cards", { students });
+  } catch (err) {
+    res.status(500).send("Failed to load report cards");
+  }
+});
+
+app.post("/dashboard/report-cards/generate", requireRole("owner", "admin", "teacher"), async (req, res) => {
+  const { student_id, term, session } = req.body;
+  if (!student_id || !term || !session) {
+    return res.status(400).send("Missing report card fields");
+  }
+  const student = await dbGet("SELECT * FROM students WHERE id = ?", [student_id]);
+  if (!student) return res.status(404).send("Student not found");
+
+  if (req.session.user.role === "teacher") {
+    const teacherClass = await getTeacherClass(req.session.user);
+    if (!teacherClass || student.class_name !== teacherClass) {
+      return res.status(403).render("forbidden");
+    }
+  }
+
+  const assessments = await dbAll(
+    `SELECT subject, assessment_type, score
+     FROM assessments
+     WHERE student_id = ? AND term = ? AND session = ?`,
+    [student_id, term.trim(), session.trim()]
+  );
+
+  const examResults = await dbAll(
+    `SELECT results.subject, results.score
+     FROM results
+     JOIN exams ON exams.id = results.exam_id
+     WHERE results.student_id = ? AND exams.term = ? AND exams.session = ?`,
+    [student_id, term.trim(), session.trim()]
+  );
+
+  const subjectMap = new Map();
+  assessments.forEach((item) => {
+    if (!subjectMap.has(item.subject)) {
+      subjectMap.set(item.subject, { ca: 0, exam: 0 });
+    }
+    const current = subjectMap.get(item.subject);
+    current.ca += Number(item.score);
+  });
+  examResults.forEach((item) => {
+    if (!subjectMap.has(item.subject)) {
+      subjectMap.set(item.subject, { ca: 0, exam: 0 });
+    }
+    const current = subjectMap.get(item.subject);
+    current.exam = Number(item.score);
+  });
+
+  const rows = Array.from(subjectMap.entries()).map(([subject, scores]) => ({
+    subject,
+    ca: scores.ca,
+    exam: scores.exam,
+    total: scores.ca + scores.exam
+  }));
+
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader(
+    "Content-Disposition",
+    `attachment; filename=report-card-${student.first_name}-${student.last_name}.pdf`
+  );
+
+  const doc = new PDFDocument({ margin: 50 });
+  doc.pipe(res);
+
+  doc.fontSize(20).text("Excellence Academy", { align: "center" });
+  doc.moveDown(0.5);
+  doc.fontSize(14).text("Term Report Card", { align: "center" });
+  doc.moveDown();
+
+  doc.fontSize(12).text(`Student: ${student.first_name} ${student.last_name}`);
+  doc.text(`Class: ${student.class_name}`);
+  doc.text(`Term: ${term} | Session: ${session}`);
+  doc.moveDown();
+
+  doc.fontSize(12).text("Subject", 50, doc.y, { continued: true });
+  doc.text("CA", 250, doc.y, { continued: true });
+  doc.text("Exam", 330, doc.y, { continued: true });
+  doc.text("Total", 420, doc.y);
+  doc.moveDown(0.5);
+
+  rows.forEach((row) => {
+    doc.text(row.subject, 50, doc.y, { continued: true });
+    doc.text(row.ca.toFixed(1), 250, doc.y, { continued: true });
+    doc.text(row.exam.toFixed(1), 330, doc.y, { continued: true });
+    doc.text(row.total.toFixed(1), 420, doc.y);
+  });
+
+  if (!rows.length) {
+    doc.moveDown();
+    doc.text("No assessment records found for this term.");
+  }
+
+  doc.end();
+});
+
+app.post("/dashboard/results", requireRole("owner", "admin", "teacher"), async (req, res) => {
   const { student_id, exam_id, subject, score, grade, remark } = req.body;
   if (!student_id || !exam_id || !subject || !score || !grade) {
     return res.status(400).send("Missing result fields");
+  }
+  if (req.session.user.role === "teacher") {
+    const teacherClass = await getTeacherClass(req.session.user);
+    const student = await dbGet("SELECT class_name FROM students WHERE id = ?", [student_id]);
+    if (teacherClass && student && student.class_name !== teacherClass) {
+      return res.status(403).render("forbidden");
+    }
   }
   await dbRun(
     `INSERT INTO results (student_id, exam_id, subject, score, grade, remark, created_at)
@@ -495,12 +1123,12 @@ app.post("/dashboard/results", requireAuth, async (req, res) => {
   res.redirect("/dashboard/results");
 });
 
-app.post("/dashboard/results/:id/delete", requireAuth, async (req, res) => {
+app.post("/dashboard/results/:id/delete", requireRole("owner", "admin"), async (req, res) => {
   await dbRun("DELETE FROM results WHERE id = ?", [req.params.id]);
   res.redirect("/dashboard/results");
 });
 
-app.get("/dashboard/payments", requireAuth, async (req, res) => {
+app.get("/dashboard/payments", requireRole("owner", "admin", "accountant"), async (req, res) => {
   try {
     const [payments, students] = await Promise.all([
       dbAll(
@@ -517,7 +1145,7 @@ app.get("/dashboard/payments", requireAuth, async (req, res) => {
   }
 });
 
-app.post("/dashboard/payments", requireAuth, async (req, res) => {
+app.post("/dashboard/payments", requireRole("owner", "admin", "accountant"), async (req, res) => {
   const { student_id, class_name, term, session, total_fee, amount_paid } = req.body;
   if (!student_id || !class_name || !term || !session || !total_fee || !amount_paid) {
     return res.status(400).send("Missing payment fields");
@@ -542,12 +1170,79 @@ app.post("/dashboard/payments", requireAuth, async (req, res) => {
   res.redirect("/dashboard/payments");
 });
 
-app.post("/dashboard/payments/:id/delete", requireAuth, async (req, res) => {
+app.post("/dashboard/payments/:id/delete", requireRole("owner", "admin"), async (req, res) => {
   await dbRun("DELETE FROM student_fees WHERE id = ?", [req.params.id]);
   res.redirect("/dashboard/payments");
 });
 
-app.get("/api/inquiries", (req, res) => {
+app.get("/dashboard/users", requireRole("owner"), async (req, res) => {
+  try {
+    const users = await dbAll("SELECT id, name, email, role, created_at FROM users ORDER BY id DESC");
+    res.render("users", { users, roles: ROLE_OPTIONS, error: null, success: null });
+  } catch (err) {
+    res.status(500).send("Failed to load users");
+  }
+});
+
+app.post("/dashboard/users", requireRole("owner"), async (req, res) => {
+  const { name, email, password, role } = req.body;
+  if (!name || !email || !password || !role) {
+    const users = await dbAll("SELECT id, name, email, role, created_at FROM users ORDER BY id DESC");
+    return res.status(400).render("users", {
+      users,
+      roles: ROLE_OPTIONS,
+      error: "All fields are required.",
+      success: null
+    });
+  }
+  if (!ROLE_SET.has(role)) {
+    const users = await dbAll("SELECT id, name, email, role, created_at FROM users ORDER BY id DESC");
+    return res.status(400).render("users", {
+      users,
+      roles: ROLE_OPTIONS,
+      error: "Invalid role selected.",
+      success: null
+    });
+  }
+  try {
+    const hash = bcrypt.hashSync(password, 10);
+    await dbRun(
+      "INSERT INTO users (name, email, password_hash, role, created_at) VALUES (?, ?, ?, ?, ?)",
+      [name.trim(), email.trim(), hash, role, new Date().toISOString()]
+    );
+    const users = await dbAll("SELECT id, name, email, role, created_at FROM users ORDER BY id DESC");
+    return res.render("users", {
+      users,
+      roles: ROLE_OPTIONS,
+      error: null,
+      success: "User created successfully."
+    });
+  } catch (err) {
+    const users = await dbAll("SELECT id, name, email, role, created_at FROM users ORDER BY id DESC");
+    return res.status(400).render("users", {
+      users,
+      roles: ROLE_OPTIONS,
+      error: "Failed to create user. Email may already exist.",
+      success: null
+    });
+  }
+});
+
+app.post("/dashboard/users/:id/delete", requireRole("owner"), async (req, res) => {
+  if (req.session.user && String(req.session.user.id) === String(req.params.id)) {
+    const users = await dbAll("SELECT id, name, email, role, created_at FROM users ORDER BY id DESC");
+    return res.status(400).render("users", {
+      users,
+      roles: ROLE_OPTIONS,
+      error: "You cannot delete your own account.",
+      success: null
+    });
+  }
+  await dbRun("DELETE FROM users WHERE id = ?", [req.params.id]);
+  return res.redirect("/dashboard/users");
+});
+
+app.get("/api/inquiries", requireRole("owner", "admin"), (req, res) => {
   db.all(
     "SELECT id, name, email, phone, section, message, created_at FROM inquiries ORDER BY id DESC LIMIT 50",
     (err, rows) => {

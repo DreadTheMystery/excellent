@@ -1,0 +1,51 @@
+<%- include('partials/adminHeader', { title: 'Classes' }) %>
+  <%- include('partials/adminNav', { title: 'Classes' }) %>
+
+    <main class="container section">
+      <div class="panel">
+        <h2>Class Management</h2>
+        <p class="note">Assign class teachers and set class capacities.</p>
+        <div class="table-wrapper">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Class</th>
+                <th>Capacity</th>
+                <th>Class Teacher</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% classes.forEach((classItem)=> { %>
+                <tr>
+                  <form action="/dashboard/classes" method="POST">
+                    <td>
+                      <%= classItem.name %>
+                    </td>
+                    <td>
+                      <input type="hidden" name="class_id" value="<%= classItem.id %>" />
+                      <input type="number" name="capacity" min="1" value="<%= classItem.capacity %>" required />
+                    </td>
+                    <td>
+                      <select name="class_teacher_id">
+                        <option value="">Unassigned</option>
+                        <% teachers.forEach((teacher)=> { %>
+                          <option value="<%= teacher.id %>" <%=classItem.class_teacher_id===teacher.id ? 'selected' : ''
+                            %>><%= teacher.name %>
+                          </option>
+                          <% }) %>
+                      </select>
+                    </td>
+                    <td>
+                      <button class="btn" type="submit">Save</button>
+                    </td>
+                  </form>
+                </tr>
+                <% }) %>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </main>
+
+    <%- include('partials/adminFooter') %>

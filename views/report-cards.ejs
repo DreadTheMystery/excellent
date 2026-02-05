@@ -1,0 +1,24 @@
+<%- include('partials/adminHeader', { title: 'Report Cards' }) %>
+    <%- include('partials/adminNav', { title: 'Report Cards' }) %>
+
+        <main class="container section">
+            <div class="panel">
+                <h2>Generate Report Card (PDF)</h2>
+                <form action="/dashboard/report-cards/generate" method="POST" class="form grid-form">
+                    <select name="student_id" required>
+                        <option value="">Select Student</option>
+                        <% students.forEach((student)=> { %>
+                            <option value="<%= student.id %>">
+                                <%= student.first_name %>
+                                    <%= student.last_name %> - <%= student.class_name %>
+                            </option>
+                            <% }) %>
+                    </select>
+                    <input type="text" name="term" placeholder="Term (First/Second/Third)" required />
+                    <input type="text" name="session" placeholder="Session (e.g. 2026/2027)" required />
+                    <button class="btn" type="submit">Download PDF</button>
+                </form>
+            </div>
+        </main>
+
+        <%- include('partials/adminFooter') %>

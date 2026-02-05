@@ -1,0 +1,67 @@
+<%- include('partials/adminHeader', { title: 'Receipt' }) %>
+  <%- include('partials/adminNav', { title: 'Invoices' }) %>
+
+    <main class="container section">
+      <div class="panel">
+        <h2>Payment Receipt</h2>
+        <p><strong>Student:</strong>
+          <%= invoice.first_name %>
+            <%= invoice.last_name %>
+        </p>
+        <p><strong>Class:</strong>
+          <%= invoice.class_name %>
+        </p>
+        <p><strong>Term/Session:</strong>
+          <%= invoice.term %> / <%= invoice.session %>
+        </p>
+        <p><strong>Invoice Status:</strong>
+          <%= invoice.status %>
+        </p>
+        <p><strong>Total Fee:</strong> ₦<%= Number(invoice.total).toLocaleString('en-NG') %>
+        </p>
+        <p><strong>Discount:</strong> ₦<%= Number(invoice.discount).toLocaleString('en-NG') %>
+        </p>
+        <p><strong>Amount Paid:</strong> ₦<%= Number(invoice.amount_paid).toLocaleString('en-NG') %>
+        </p>
+        <p><strong>Balance:</strong> ₦<%= Number(invoice.total - invoice.discount -
+            invoice.amount_paid).toLocaleString('en-NG') %>
+        </p>
+      </div>
+
+      <div class="panel">
+        <h2>Payment History</h2>
+        <div class="table-wrapper">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Amount (NGN)</th>
+                <th>Method</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% if (!payments.length) { %>
+                <tr>
+                  <td colspan="3">No payments recorded yet.</td>
+                </tr>
+                <% } %>
+                  <% payments.forEach((payment)=> { %>
+                    <tr>
+                      <td>
+                        <%= payment.paid_on %>
+                      </td>
+                      <td>
+                        <%= Number(payment.amount).toLocaleString('en-NG') %>
+                      </td>
+                      <td>
+                        <%= payment.method || '-' %>
+                      </td>
+                    </tr>
+                    <% }) %>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </main>
+
+    <%- include('partials/adminFooter') %>

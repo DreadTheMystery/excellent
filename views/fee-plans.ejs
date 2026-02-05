@@ -1,0 +1,75 @@
+<%- include('partials/adminHeader', { title: 'Fee Plans' }) %>
+  <%- include('partials/adminNav', { title: 'Fee Plans' }) %>
+
+    <main class="container section">
+      <div class="panel">
+        <h2>Create Fee Plan</h2>
+        <form action="/dashboard/fee-plans" method="POST" class="form grid-form">
+          <select name="class_name" required>
+            <option value="">Class</option>
+            <% classOptions.forEach((className)=> { %>
+              <option value="<%= className %>">
+                <%= className %>
+              </option>
+              <% }) %>
+          </select>
+          <input type="text" name="term" placeholder="Term (First/Second/Third)" required />
+          <input type="text" name="session" placeholder="Session (e.g. 2026/2027)" required />
+          <input type="number" name="amount" step="0.01" placeholder="Total Fee (NGN)" required />
+          <input type="number" name="discount" step="0.01" placeholder="Discount (NGN)" />
+          <button class="btn" type="submit">Save Plan</button>
+        </form>
+      </div>
+
+      <div class="panel">
+        <h2>Fee Plans</h2>
+        <div class="table-wrapper">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Class</th>
+                <th>Term</th>
+                <th>Session</th>
+                <th>Total (NGN)</th>
+                <th>Discount (NGN)</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% if (!plans.length) { %>
+                <tr>
+                  <td colspan="6">No fee plans yet.</td>
+                </tr>
+                <% } %>
+                  <% plans.forEach((plan)=> { %>
+                    <tr>
+                      <td>
+                        <%= plan.class_name %>
+                      </td>
+                      <td>
+                        <%= plan.term %>
+                      </td>
+                      <td>
+                        <%= plan.session %>
+                      </td>
+                      <td>
+                        <%= Number(plan.amount).toLocaleString('en-NG') %>
+                      </td>
+                      <td>
+                        <%= Number(plan.discount || 0).toLocaleString('en-NG') %>
+                      </td>
+                      <td>
+                        <form action="/dashboard/fee-plans/<%= plan.id %>/delete" method="POST"
+                          onsubmit="return confirm('Delete this plan?');">
+                          <button class="btn btn-danger" type="submit">Delete</button>
+                        </form>
+                      </td>
+                    </tr>
+                    <% }) %>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </main>
+
+    <%- include('partials/adminFooter') %>

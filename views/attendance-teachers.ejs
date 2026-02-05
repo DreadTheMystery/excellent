@@ -1,0 +1,59 @@
+<%- include('partials/adminHeader', { title: 'Teacher Attendance' }) %>
+  <%- include('partials/adminNav', { title: 'Teacher Attendance' }) %>
+
+    <main class="container section">
+      <div class="panel">
+        <h2>Record Teacher Attendance</h2>
+        <form action="/dashboard/attendance/teachers" method="POST" class="form grid-form">
+          <select name="teacher_id" required>
+            <option value="">Select Teacher</option>
+            <% teachers.forEach((teacher)=> { %>
+              <option value="<%= teacher.id %>">
+                <%= teacher.name %>
+              </option>
+              <% }) %>
+          </select>
+          <input type="date" name="attendance_date" value="<%= date %>" required />
+          <select name="status" required>
+            <option value="Present">Present</option>
+            <option value="Absent">Absent</option>
+            <option value="Late">Late</option>
+          </select>
+          <button class="btn" type="submit">Save Attendance</button>
+        </form>
+      </div>
+
+      <div class="panel">
+        <h2>Attendance Records - <%= date %>
+        </h2>
+        <div class="table-wrapper">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Teacher</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% if (!records.length) { %>
+                <tr>
+                  <td colspan="2">No attendance recorded for this date.</td>
+                </tr>
+                <% } %>
+                  <% records.forEach((record)=> { %>
+                    <tr>
+                      <td>
+                        <%= record.name %>
+                      </td>
+                      <td><span class="badge badge-primary">
+                          <%= record.status %>
+                        </span></td>
+                    </tr>
+                    <% }) %>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </main>
+
+    <%- include('partials/adminFooter') %>
