@@ -9,13 +9,27 @@ const PDFDocument = require("pdfkit");
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-const DB_PATH = process.env.DB_PATH || path.join(__dirname, "data", "school.db");
-const DB_DIR = path.dirname(DB_PATH);
+let dbPath = process.env.DB_PATH || path.join(__dirname, "data", "school.db");
+let dbDir = path.dirname(dbPath);
 
-if (!fs.existsSync(DB_DIR)) {
-  fs.mkdirSync(DB_DIR, { recursive: true });
+try {
+  if (!fs.existsSync(dbDir)) {
+    fs.mkdirSync(dbDir, { recursive: true });
+  }
+} catch (err) {
+  if (err.code === "EACCES") {
+    console.warn("DB path not writable, falling back to local data directory.");
+    dbPath = path.join(__dirname, "data", "school.db");
+    dbDir = path.dirname(dbPath);
+    if (!fs.existsSync(dbDir)) {
+      fs.mkdirSync(dbDir, { recursive: true });
+    }
+  } else {
+    throw err;
+  }
 }
-const db = new sqlite3.Database(DB_PATH);
+
+const db = new sqlite3.Database(dbPath);
 
 app.set("view engine", "ejs");
 app.set("views", path.join(__dirname, "views"));
