@@ -15,7 +15,14 @@
     </div>
 </header>
 <nav class="admin-nav <%= user && user.role === 'teacher' ? 'admin-nav-sidebar' : '' %>">
-    <div class="container admin-nav-inner <%= user && user.role === 'teacher' ? 'admin-nav-inner-sidebar' : '' %>">
+    <div class="container admin-nav-toggle-wrap">
+        <button class="admin-nav-toggle" type="button" aria-expanded="false" aria-controls="admin-nav-links">
+            <span class="toggle-icon">☰</span>
+            <span>Menu</span>
+        </button>
+    </div>
+    <div class="container admin-nav-inner <%= user && user.role === 'teacher' ? 'admin-nav-inner-sidebar' : '' %>"
+        id="admin-nav-links">
         <a href="/dashboard" class="<%= title === 'Dashboard' ? 'active' : '' %>"><i class="ri-dashboard-line"></i>
             Overview</a>
         <% if (user && ['owner','admin','teacher'].includes(user.role)) { %>

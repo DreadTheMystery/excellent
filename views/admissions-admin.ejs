@@ -1,42 +1,58 @@
 <%- include('partials/adminHeader', { title: 'Admissions' }) %>
-<%- include('partials/adminNav', { title: 'Admissions' }) %>
+  <%- include('partials/adminNav', { title: 'Admissions' }) %>
 
-<main class="container section">
-  <div class="panel">
-    <h2>Admission Applications</h2>
-    <div class="table-wrapper">
-      <table class="table">
-        <thead>
-          <tr>
-            <th>Student</th>
-            <th>Class</th>
-            <th>Parent</th>
-            <th>Contact</th>
-            <th>Status</th>
-            <th>Submitted</th>
-          </tr>
-        </thead>
-        <tbody>
-          <% if (!applications.length) { %>
-            <tr><td colspan="6">No applications yet.</td></tr>
-          <% } %>
-          <% applications.forEach((app) => { %>
-            <tr>
-              <td><%= app.student_name %></td>
-              <td><%= app.class_applied %></td>
-              <td><%= app.parent_name %></td>
-              <td>
-                <div><%= app.parent_phone %></div>
-                <div><%= app.parent_email %></div>
-              </td>
-              <td><span class="badge badge-primary"><%= app.status %></span></td>
-              <td><%= app.created_at %></td>
-            </tr>
-          <% }) %>
-        </tbody>
-      </table>
-    </div>
-  </div>
-</main>
+    <main class="container section">
+      <div class="panel">
+        <h2>Admission Applications</h2>
+        <div class="table-wrapper">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Student</th>
+                <th>Class</th>
+                <th>Parent</th>
+                <th>Contact</th>
+                <th>Status</th>
+                <th>Submitted</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% if (!applications.length) { %>
+                <tr>
+                  <td colspan="6">No applications yet.</td>
+                </tr>
+                <% } %>
+                  <% applications.forEach((app)=> { %>
+                    <tr>
+                      <td>
+                        <%= app.student_name %>
+                      </td>
+                      <td>
+                        <%= app.class_applied %>
+                      </td>
+                      <td>
+                        <%= app.parent_name %>
+                      </td>
+                      <td>
+                        <div>
+                          <%= app.parent_phone %>
+                        </div>
+                        <div>
+                          <%= app.parent_email %>
+                        </div>
+                      </td>
+                      <td><span class="badge badge-primary">
+                          <%= app.status %>
+                        </span></td>
+                      <td>
+                        <%= app.created_at %>
+                      </td>
+                    </tr>
+                    <% }) %>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </main>
 
-<%- include('partials/adminFooter') %>
+    <%- include('partials/adminFooter') %>

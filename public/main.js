@@ -51,4 +51,27 @@ function typeEffect() {
   setTimeout(typeEffect, typeSpeed);
 }
 
-document.addEventListener("DOMContentLoaded", typeEffect);
+document.addEventListener("DOMContentLoaded", () => {
+  typeEffect();
+
+  const navToggles = document.querySelectorAll(".admin-nav-toggle");
+  navToggles.forEach((toggle) => {
+    const nav = toggle.closest(".admin-nav");
+    if (!nav) return;
+
+    toggle.addEventListener("click", () => {
+      const isOpen = nav.classList.toggle("is-open");
+      toggle.setAttribute("aria-expanded", String(isOpen));
+    });
+
+    const links = nav.querySelectorAll(".admin-nav-inner a");
+    links.forEach((link) => {
+      link.addEventListener("click", () => {
+        if (window.matchMedia("(max-width: 768px)").matches) {
+          nav.classList.remove("is-open");
+          toggle.setAttribute("aria-expanded", "false");
+        }
+      });
+    });
+  });
+});

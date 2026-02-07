@@ -84,6 +84,10 @@ img {
     margin: 0 auto;
 }
 
+position: sticky;
+z-index: 200;
+padding-bottom: 0.5rem;
+
 .section {
     padding: 5rem 0;
 }
@@ -93,11 +97,20 @@ img {
 }
 
 .center {
-    text-align: center;
+    padding: 0.75rem 0.75rem 1rem;
 }
 
 /* Navbar */
 .nav {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 100%;
+    background: #ffffff;
+    border-bottom: 1px solid #e2e8f0;
+    box-shadow: 0 16px 30px -24px rgb(15 23 42 / 0.45);
+    max-height: 60vh;
+    overflow-y: auto;
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -472,33 +485,69 @@ details[open] summary {
         grid-template-columns: 1fr;
     }
 
+    .admin-nav-toggle-wrap {
+        display: flex !important;
+        justify-content: flex-end;
+        padding: 0.6rem 0.5rem 0;
+    }
+
     .hero {
         text-align: center;
     }
 
     .admin-nav {
+        position: relative;
+        z-index: 200;
+    }
+
+    .admin-nav.admin-nav-sidebar {
+        position: relative;
+        width: 100%;
+        height: auto;
         top: 0;
+        left: 0;
+        border-right: none;
+        box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.05);
+        padding: 0;
+    }
+
+    .admin-nav.admin-nav-sidebar+main {
+        margin-left: 0;
+        width: 100%;
     }
 
     .admin-nav-inner {
-        gap: 0.4rem;
-        padding: 0.5rem 0.5rem;
-        scroll-snap-type: x mandatory;
-        -webkit-overflow-scrolling: touch;
+        gap: 0.6rem;
+        padding: 0;
+        flex-wrap: wrap;
+        overflow: hidden;
+        max-height: 0;
+        transition: max-height 0.4s ease, padding 0.4s ease;
+        background: #ffffff;
+        border-top: 1px solid transparent;
+        display: flex;
+    }
+
+    .admin-nav.is-open .admin-nav-inner {
+        max-height: 60vh;
+        padding: 0.75rem 0.75rem 1rem;
+        border-top-color: #e2e8f0;
+        overflow-y: auto;
     }
 
     .admin-nav a {
-        font-size: 0.85rem;
-        padding: 0.6rem 0.9rem;
-        scroll-snap-align: start;
+        font-size: 0.9rem;
+        padding: 0.7rem 0.9rem;
+        flex: 1 1 calc(50% - 0.6rem);
+        justify-content: center;
     }
 
     .admin-nav-inner::-webkit-scrollbar {
-        height: 4px;
+        width: 4px;
     }
 
     .admin-nav-inner::-webkit-scrollbar-thumb {
-        background: #cbd5f5;
+        background: #cbd5e1;
         border-radius: 999px;
     }
 }
@@ -531,6 +580,51 @@ details[open] summary {
 .cta .btn {
     background: var(--white);
     color: var(--primary);
+}
+
+.admin-nav-toggle-wrap {
+    display: none;
+}
+
+.admin-nav-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.7rem 1.2rem;
+    border-radius: 999px;
+    border: 1px solid #e2e8f0;
+    background: #ffffff;
+    color: var(--dark);
+    font-weight: 600;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    box-shadow: 0 2px 8px -4px rgba(0, 0, 0, 0.15);
+}
+
+.admin-nav-toggle:hover {
+    background: #f8fafc;
+    border-color: var(--primary);
+    color: var(--primary);
+}
+
+.admin-nav-toggle i {
+    font-size: 1.2rem;
+    transition: transform 0.3s ease;
+}
+
+.admin-nav.is-open .admin-nav-toggle i {
+    transform: rotate(90deg);
+}
+
+.toggle-icon {
+    font-size: 1.3rem;
+    line-height: 1;
+    transition: transform 0.3s ease;
+}
+
+.admin-nav.is-open .toggle-icon {
+    transform: rotate(90deg);
 }
 
 .cta .btn:hover {
