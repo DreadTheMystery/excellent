@@ -475,6 +475,32 @@ details[open] summary {
     .hero {
         text-align: center;
     }
+
+    .admin-nav {
+        top: 0;
+    }
+
+    .admin-nav-inner {
+        gap: 0.4rem;
+        padding: 0.5rem 0.5rem;
+        scroll-snap-type: x mandatory;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .admin-nav a {
+        font-size: 0.85rem;
+        padding: 0.6rem 0.9rem;
+        scroll-snap-align: start;
+    }
+
+    .admin-nav-inner::-webkit-scrollbar {
+        height: 4px;
+    }
+
+    .admin-nav-inner::-webkit-scrollbar-thumb {
+        background: #cbd5f5;
+        border-radius: 999px;
+    }
 }
 
 
