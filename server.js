@@ -1,35 +1,30 @@
+require("dotenv").config();
+
 const path = require("path");
-const fs = require("fs");
 const express = require("express");
-const sqlite3 = require("sqlite3").verbose();
 const session = require("express-session");
 const bcrypt = require("bcryptjs");
 const PDFDocument = require("pdfkit");
+const { Pool } = require("pg");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-let dbPath = process.env.DB_PATH || path.join(__dirname, "data", "school.db");
-let dbDir = path.dirname(dbPath);
-
-try {
-  if (!fs.existsSync(dbDir)) {
-    fs.mkdirSync(dbDir, { recursive: true });
-  }
-} catch (err) {
-  if (err.code === "EACCES") {
-    console.warn("DB path not writable, falling back to local data directory.");
-    dbPath = path.join(__dirname, "data", "school.db");
-    dbDir = path.dirname(dbPath);
-    if (!fs.existsSync(dbDir)) {
-      fs.mkdirSync(dbDir, { recursive: true });
-    }
-  } else {
-    throw err;
-  }
+const DATABASE_URL = process.env.DATABASE_URL;
+if (!DATABASE_URL) {
+  console.error("Missing DATABASE_URL. Set it to your Postgres connection string.");
+  process.exit(1);
 }
 
-const db = new sqlite3.Database(dbPath);
+const pool = new Pool({
+  connectionString: DATABASE_URL,
+  ssl: process.env.NODE_ENV === "production" ? { rejectUnauthorized: false } : false
+});
+
+const toPgSql = (sql) => {
+  let index = 0;
+  return sql.replace(/\?/g, () => `$${++index}`);
+};
 
 app.set("view engine", "ejs");
 app.set("views", path.join(__dirname, "views"));
@@ -50,29 +45,19 @@ app.use((req, res, next) => {
   next();
 });
 
-const dbAll = (sql, params = []) =>
-  new Promise((resolve, reject) => {
-    db.all(sql, params, (err, rows) => {
-      if (err) reject(err);
-      else resolve(rows);
-    });
-  });
+const dbAll = async (sql, params = []) => {
+  const result = await pool.query(toPgSql(sql), params);
+  return result.rows;
+};
 
-const dbGet = (sql, params = []) =>
-  new Promise((resolve, reject) => {
-    db.get(sql, params, (err, row) => {
-      if (err) reject(err);
-      else resolve(row);
-    });
-  });
+const dbGet = async (sql, params = []) => {
+  const result = await pool.query(toPgSql(sql), params);
+  return result.rows[0] || null;
+};
 
-const dbRun = (sql, params = []) =>
-  new Promise((resolve, reject) => {
-    db.run(sql, params, function (err) {
-      if (err) reject(err);
-      else resolve(this);
-    });
-  });
+const dbRun = async (sql, params = []) => {
+  return pool.query(toPgSql(sql), params);
+};
 
 const CLASS_OPTIONS = [
   "Primary 1A",
@@ -104,224 +89,227 @@ const CLASS_OPTIONS = [
 const ROLE_OPTIONS = ["owner", "admin", "teacher", "accountant"];
 const ROLE_SET = new Set(ROLE_OPTIONS);
 
-const initDb = () => {
-  db.serialize(() => {
-    db.run(
-      `CREATE TABLE IF NOT EXISTS inquiries (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT NOT NULL,
-        email TEXT NOT NULL,
-        phone TEXT NOT NULL,
-        section TEXT NOT NULL,
-        message TEXT NOT NULL,
-        created_at TEXT NOT NULL
-      )`
+const initDb = async () => {
+  await dbRun(
+    `CREATE TABLE IF NOT EXISTS inquiries (
+      id SERIAL PRIMARY KEY,
+      name TEXT NOT NULL,
+      email TEXT NOT NULL,
+      phone TEXT NOT NULL,
+      section TEXT NOT NULL,
+      message TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    )`
+  );
+  await dbRun(
+    `CREATE TABLE IF NOT EXISTS admissions (
+      id SERIAL PRIMARY KEY,
+      student_name TEXT NOT NULL,
+      dob TEXT NOT NULL,
+      gender TEXT NOT NULL,
+      class_applied TEXT NOT NULL,
+      parent_name TEXT NOT NULL,
+      parent_phone TEXT NOT NULL,
+      parent_email TEXT NOT NULL,
+      address TEXT,
+      previous_school TEXT,
+      notes TEXT,
+      status TEXT NOT NULL DEFAULT 'pending',
+      created_at TEXT NOT NULL
+    )`
+  );
+  await dbRun(
+    `CREATE TABLE IF NOT EXISTS users (
+      id SERIAL PRIMARY KEY,
+      name TEXT NOT NULL,
+      email TEXT NOT NULL UNIQUE,
+      password_hash TEXT NOT NULL,
+      role TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    )`
+  );
+  await dbRun(
+    `CREATE TABLE IF NOT EXISTS students (
+      id SERIAL PRIMARY KEY,
+      first_name TEXT NOT NULL,
+      last_name TEXT NOT NULL,
+      gender TEXT NOT NULL,
+      dob TEXT NOT NULL,
+      class_name TEXT NOT NULL,
+      guardian_name TEXT NOT NULL,
+      guardian_phone TEXT NOT NULL,
+      address TEXT,
+      created_at TEXT NOT NULL
+    )`
+  );
+  await dbRun(
+    `CREATE TABLE IF NOT EXISTS teachers (
+      id SERIAL PRIMARY KEY,
+      name TEXT NOT NULL,
+      email TEXT NOT NULL,
+      phone TEXT NOT NULL,
+      subject TEXT NOT NULL,
+      class_name TEXT,
+      qualification TEXT,
+      created_at TEXT NOT NULL
+    )`
+  );
+  await dbRun(
+    `CREATE TABLE IF NOT EXISTS finance_records (
+      id SERIAL PRIMARY KEY,
+      title TEXT NOT NULL,
+      category TEXT NOT NULL,
+      amount REAL NOT NULL,
+      type TEXT NOT NULL,
+      occurred_on TEXT NOT NULL,
+      notes TEXT,
+      created_at TEXT NOT NULL
+    )`
+  );
+  await dbRun(
+    `CREATE TABLE IF NOT EXISTS exams (
+      id SERIAL PRIMARY KEY,
+      name TEXT NOT NULL,
+      term TEXT NOT NULL,
+      session TEXT NOT NULL,
+      class_name TEXT NOT NULL,
+      exam_date TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    )`
+  );
+  await dbRun(
+    `CREATE TABLE IF NOT EXISTS results (
+      id SERIAL PRIMARY KEY,
+      student_id INTEGER NOT NULL REFERENCES students(id),
+      exam_id INTEGER NOT NULL REFERENCES exams(id),
+      subject TEXT NOT NULL,
+      score REAL NOT NULL,
+      grade TEXT NOT NULL,
+      remark TEXT,
+      created_at TEXT NOT NULL
+    )`
+  );
+  await dbRun(
+    `CREATE TABLE IF NOT EXISTS student_fees (
+      id SERIAL PRIMARY KEY,
+      student_id INTEGER NOT NULL REFERENCES students(id),
+      class_name TEXT NOT NULL,
+      term TEXT NOT NULL,
+      session TEXT NOT NULL,
+      total_fee REAL NOT NULL,
+      amount_paid REAL NOT NULL,
+      status TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    )`
+  );
+  await dbRun(
+    `CREATE TABLE IF NOT EXISTS assessments (
+      id SERIAL PRIMARY KEY,
+      student_id INTEGER NOT NULL REFERENCES students(id),
+      class_name TEXT NOT NULL,
+      term TEXT NOT NULL,
+      session TEXT NOT NULL,
+      subject TEXT NOT NULL,
+      assessment_type TEXT NOT NULL,
+      score REAL NOT NULL,
+      created_at TEXT NOT NULL
+    )`
+  );
+  await dbRun(
+    `CREATE TABLE IF NOT EXISTS classes (
+      id SERIAL PRIMARY KEY,
+      name TEXT NOT NULL UNIQUE,
+      capacity INTEGER NOT NULL,
+      class_teacher_id INTEGER REFERENCES teachers(id),
+      created_at TEXT NOT NULL
+    )`
+  );
+  await dbRun(
+    `CREATE TABLE IF NOT EXISTS timetables (
+      id SERIAL PRIMARY KEY,
+      class_name TEXT NOT NULL,
+      day TEXT NOT NULL,
+      period TEXT NOT NULL,
+      subject TEXT NOT NULL,
+      teacher_name TEXT,
+      created_at TEXT NOT NULL
+    )`
+  );
+  await dbRun(
+    `CREATE TABLE IF NOT EXISTS attendance_students (
+      id SERIAL PRIMARY KEY,
+      student_id INTEGER NOT NULL REFERENCES students(id),
+      class_name TEXT NOT NULL,
+      attendance_date TEXT NOT NULL,
+      status TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    )`
+  );
+  await dbRun(
+    `CREATE TABLE IF NOT EXISTS attendance_teachers (
+      id SERIAL PRIMARY KEY,
+      teacher_id INTEGER NOT NULL REFERENCES teachers(id),
+      attendance_date TEXT NOT NULL,
+      status TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    )`
+  );
+  await dbRun(
+    `CREATE TABLE IF NOT EXISTS fee_plans (
+      id SERIAL PRIMARY KEY,
+      class_name TEXT NOT NULL,
+      term TEXT NOT NULL,
+      session TEXT NOT NULL,
+      amount REAL NOT NULL,
+      discount REAL NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL
+    )`
+  );
+  await dbRun(
+    `CREATE TABLE IF NOT EXISTS invoices (
+      id SERIAL PRIMARY KEY,
+      student_id INTEGER NOT NULL REFERENCES students(id),
+      class_name TEXT NOT NULL,
+      term TEXT NOT NULL,
+      session TEXT NOT NULL,
+      fee_plan_id INTEGER REFERENCES fee_plans(id),
+      total REAL NOT NULL,
+      discount REAL NOT NULL,
+      amount_paid REAL NOT NULL,
+      due_date TEXT NOT NULL,
+      status TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    )`
+  );
+  await dbRun(
+    `CREATE TABLE IF NOT EXISTS invoice_payments (
+      id SERIAL PRIMARY KEY,
+      invoice_id INTEGER NOT NULL REFERENCES invoices(id),
+      amount REAL NOT NULL,
+      method TEXT,
+      paid_on TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    )`
+  );
+  await dbRun("ALTER TABLE teachers ADD COLUMN IF NOT EXISTS class_name TEXT");
+
+  const row = await dbGet("SELECT COUNT(*) as count FROM users");
+  if (row && Number(row.count) === 0) {
+    const adminEmail = process.env.ADMIN_EMAIL || "owner@excellenceacademy.ng";
+    const adminPass = process.env.ADMIN_PASSWORD || "ChangeMe123!";
+    const hash = bcrypt.hashSync(adminPass, 10);
+    await dbRun(
+      "INSERT INTO users (name, email, password_hash, role, created_at) VALUES (?, ?, ?, ?, ?)",
+      ["School Owner", adminEmail, hash, "owner", new Date().toISOString()]
     );
-    db.run(
-      `CREATE TABLE IF NOT EXISTS users (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT NOT NULL,
-        email TEXT NOT NULL UNIQUE,
-        password_hash TEXT NOT NULL,
-        role TEXT NOT NULL,
-        created_at TEXT NOT NULL
-      )`
-    );
-    db.run(
-      `CREATE TABLE IF NOT EXISTS students (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        first_name TEXT NOT NULL,
-        last_name TEXT NOT NULL,
-        gender TEXT NOT NULL,
-        dob TEXT NOT NULL,
-        class_name TEXT NOT NULL,
-        guardian_name TEXT NOT NULL,
-        guardian_phone TEXT NOT NULL,
-        address TEXT,
-        created_at TEXT NOT NULL
-      )`
-    );
-    db.run(
-      `CREATE TABLE IF NOT EXISTS teachers (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT NOT NULL,
-        email TEXT NOT NULL,
-        phone TEXT NOT NULL,
-        subject TEXT NOT NULL,
-        class_name TEXT,
-        qualification TEXT,
-        created_at TEXT NOT NULL
-      )`
-    );
-    db.run(
-      `CREATE TABLE IF NOT EXISTS finance_records (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        title TEXT NOT NULL,
-        category TEXT NOT NULL,
-        amount REAL NOT NULL,
-        type TEXT NOT NULL,
-        occurred_on TEXT NOT NULL,
-        notes TEXT,
-        created_at TEXT NOT NULL
-      )`
-    );
-    db.run(
-      `CREATE TABLE IF NOT EXISTS exams (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT NOT NULL,
-        term TEXT NOT NULL,
-        session TEXT NOT NULL,
-        class_name TEXT NOT NULL,
-        exam_date TEXT NOT NULL,
-        created_at TEXT NOT NULL
-      )`
-    );
-    db.run(
-      `CREATE TABLE IF NOT EXISTS results (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        student_id INTEGER NOT NULL,
-        exam_id INTEGER NOT NULL,
-        subject TEXT NOT NULL,
-        score REAL NOT NULL,
-        grade TEXT NOT NULL,
-        remark TEXT,
-        created_at TEXT NOT NULL,
-        FOREIGN KEY(student_id) REFERENCES students(id),
-        FOREIGN KEY(exam_id) REFERENCES exams(id)
-      )`
-    );
-    db.run(
-      `CREATE TABLE IF NOT EXISTS student_fees (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        student_id INTEGER NOT NULL,
-        class_name TEXT NOT NULL,
-        term TEXT NOT NULL,
-        session TEXT NOT NULL,
-        total_fee REAL NOT NULL,
-        amount_paid REAL NOT NULL,
-        status TEXT NOT NULL,
-        created_at TEXT NOT NULL,
-        FOREIGN KEY(student_id) REFERENCES students(id)
-      )`
-    );
-    db.run(
-      `CREATE TABLE IF NOT EXISTS assessments (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        student_id INTEGER NOT NULL,
-        class_name TEXT NOT NULL,
-        term TEXT NOT NULL,
-        session TEXT NOT NULL,
-        subject TEXT NOT NULL,
-        assessment_type TEXT NOT NULL,
-        score REAL NOT NULL,
-        created_at TEXT NOT NULL,
-        FOREIGN KEY(student_id) REFERENCES students(id)
-      )`
-    );
-    db.run(
-      `CREATE TABLE IF NOT EXISTS classes (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT NOT NULL UNIQUE,
-        capacity INTEGER NOT NULL,
-        class_teacher_id INTEGER,
-        created_at TEXT NOT NULL,
-        FOREIGN KEY(class_teacher_id) REFERENCES teachers(id)
-      )`
-    );
-    db.run(
-      `CREATE TABLE IF NOT EXISTS timetables (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        class_name TEXT NOT NULL,
-        day TEXT NOT NULL,
-        period TEXT NOT NULL,
-        subject TEXT NOT NULL,
-        teacher_name TEXT,
-        created_at TEXT NOT NULL
-      )`
-    );
-    db.run(
-      `CREATE TABLE IF NOT EXISTS attendance_students (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        student_id INTEGER NOT NULL,
-        class_name TEXT NOT NULL,
-        attendance_date TEXT NOT NULL,
-        status TEXT NOT NULL,
-        created_at TEXT NOT NULL,
-        FOREIGN KEY(student_id) REFERENCES students(id)
-      )`
-    );
-    db.run(
-      `CREATE TABLE IF NOT EXISTS attendance_teachers (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        teacher_id INTEGER NOT NULL,
-        attendance_date TEXT NOT NULL,
-        status TEXT NOT NULL,
-        created_at TEXT NOT NULL,
-        FOREIGN KEY(teacher_id) REFERENCES teachers(id)
-      )`
-    );
-    db.run(
-      `CREATE TABLE IF NOT EXISTS fee_plans (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        class_name TEXT NOT NULL,
-        term TEXT NOT NULL,
-        session TEXT NOT NULL,
-        amount REAL NOT NULL,
-        discount REAL NOT NULL DEFAULT 0,
-        created_at TEXT NOT NULL
-      )`
-    );
-    db.run(
-      `CREATE TABLE IF NOT EXISTS invoices (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        student_id INTEGER NOT NULL,
-        class_name TEXT NOT NULL,
-        term TEXT NOT NULL,
-        session TEXT NOT NULL,
-        fee_plan_id INTEGER,
-        total REAL NOT NULL,
-        discount REAL NOT NULL,
-        amount_paid REAL NOT NULL,
-        due_date TEXT NOT NULL,
-        status TEXT NOT NULL,
-        created_at TEXT NOT NULL,
-        FOREIGN KEY(student_id) REFERENCES students(id),
-        FOREIGN KEY(fee_plan_id) REFERENCES fee_plans(id)
-      )`
-    );
-    db.run(
-      `CREATE TABLE IF NOT EXISTS invoice_payments (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        invoice_id INTEGER NOT NULL,
-        amount REAL NOT NULL,
-        method TEXT,
-        paid_on TEXT NOT NULL,
-        created_at TEXT NOT NULL,
-        FOREIGN KEY(invoice_id) REFERENCES invoices(id)
-      )`
-    );
-    db.run("ALTER TABLE teachers ADD COLUMN class_name TEXT", () => {});
-    db.get("SELECT COUNT(*) as count FROM users", (err, row) => {
-      if (err) return;
-      if (row.count === 0) {
-        const adminEmail = process.env.ADMIN_EMAIL || "owner@excellenceacademy.ng";
-        const adminPass = process.env.ADMIN_PASSWORD || "ChangeMe123!";
-        const hash = bcrypt.hashSync(adminPass, 10);
-        db.run(
-          "INSERT INTO users (name, email, password_hash, role, created_at) VALUES (?, ?, ?, ?, ?)",
-          ["School Owner", adminEmail, hash, "owner", new Date().toISOString()],
-          (seedErr) => {
-            if (!seedErr) {
-              console.log("Default owner created:", adminEmail, adminPass);
-            }
-          }
-        );
-      }
-    });
-  });
+    console.log("Default owner created:", adminEmail, adminPass);
+  }
 };
 
-initDb();
+initDb().catch((err) => {
+  console.error("Failed to initialize database", err);
+  process.exit(1);
+});
 
 const formatDate = (isoString) => {
   const date = new Date(isoString);
@@ -357,6 +345,55 @@ const getTeacherClass = async (user) => {
 app.get("/", (req, res) => {
   const success = req.query.success === "1";
   res.render("index", { success });
+});
+
+app.get("/admissions", (req, res) => {
+  const success = req.query.success === "1";
+  res.render("admissions", { success, error: null, classOptions: CLASS_OPTIONS });
+});
+
+app.post("/admissions", async (req, res) => {
+  const {
+    student_name,
+    dob,
+    gender,
+    class_applied,
+    parent_name,
+    parent_phone,
+    parent_email,
+    address,
+    previous_school,
+    notes
+  } = req.body;
+
+  if (!student_name || !dob || !gender || !class_applied || !parent_name || !parent_phone || !parent_email) {
+    return res.status(400).render("admissions", {
+      success: false,
+      error: "Please fill all required fields.",
+      classOptions: CLASS_OPTIONS
+    });
+  }
+
+  await dbRun(
+    `INSERT INTO admissions (student_name, dob, gender, class_applied, parent_name, parent_phone, parent_email, address, previous_school, notes, status, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      student_name.trim(),
+      dob,
+      gender,
+      class_applied,
+      parent_name.trim(),
+      parent_phone.trim(),
+      parent_email.trim(),
+      address ? address.trim() : "",
+      previous_school ? previous_school.trim() : "",
+      notes ? notes.trim() : "",
+      "pending",
+      new Date().toISOString()
+    ]
+  );
+
+  res.redirect("/admissions?success=1");
 });
 
 app.get("/login", (req, res) => {
@@ -468,6 +505,15 @@ app.get("/dashboard", requireRole("owner", "admin", "teacher", "accountant"), as
     });
   } catch (err) {
     res.status(500).send("Failed to load dashboard");
+  }
+});
+
+app.get("/dashboard/admissions", requireRole("owner", "admin"), async (req, res) => {
+  try {
+    const applications = await dbAll("SELECT * FROM admissions ORDER BY id DESC");
+    res.render("admissions-admin", { applications });
+  } catch (err) {
+    res.status(500).send("Failed to load admissions");
   }
 });
 

@@ -730,41 +730,51 @@ details[open] summary {
 
 /* Admin Navigation */
 .admin-nav {
-    background: var(--white);
+    background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
     border-bottom: 1px solid #e2e8f0;
     position: sticky;
     top: 0;
     z-index: 100;
-    box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.05);
+    box-shadow: 0 8px 20px -16px rgb(15 23 42 / 0.35);
+    backdrop-filter: blur(6px);
 }
 
 .admin-nav-inner {
     display: flex;
     gap: 0.5rem;
     overflow-x: auto;
-    padding: 0;
+    padding: 0.6rem 0;
+    scrollbar-width: none;
+}
+
+.admin-nav-inner::-webkit-scrollbar {
+    height: 0;
 }
 
 .admin-nav a {
-    padding: 1rem 1.25rem;
-    color: var(--text);
-    font-weight: 500;
+    padding: 0.7rem 1.1rem;
+    color: #475569;
+    font-weight: 600;
     display: flex;
     align-items: center;
-    gap: 0.5rem;
-    border-bottom: 3px solid transparent;
+    gap: 0.55rem;
+    border: 1px solid transparent;
+    border-radius: 999px;
     white-space: nowrap;
+    background: transparent;
 }
 
 .admin-nav a:hover {
-    background: #f8fafc;
+    background: #eef2ff;
     color: var(--primary);
+    border-color: #c7d2fe;
 }
 
 .admin-nav a.active {
-    color: var(--primary);
-    border-bottom-color: var(--primary);
-    background: #eff6ff;
+    color: #1d4ed8;
+    border-color: #c7d2fe;
+    background: #e0e7ff;
+    box-shadow: 0 6px 14px -10px rgb(37 99 235 / 0.6);
 }
 
 /* Teacher Sidebar Navigation */
