@@ -6,6 +6,8 @@ const session = require("express-session");
 const bcrypt = require("bcryptjs");
 const PDFDocument = require("pdfkit");
 const { Pool } = require("pg");
+const nodemailer = require("nodemailer");
+const axios = require("axios");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -343,6 +345,40 @@ const getTeacherClass = async (user) => {
   return teacher && teacher.class_name ? teacher.class_name : null;
 };
 
+const createTransporter = () => {
+  const { SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS } = process.env;
+  if (!SMTP_HOST || !SMTP_PORT || !SMTP_USER || !SMTP_PASS) return null;
+  return nodemailer.createTransport({
+    host: SMTP_HOST,
+    port: Number(SMTP_PORT),
+    secure: Number(SMTP_PORT) === 465,
+    auth: { user: SMTP_USER, pass: SMTP_PASS }
+  });
+};
+
+const sendAdmissionEmail = async ({ to, subject, text, html }) => {
+  const transporter = createTransporter();
+  if (!transporter) return false;
+  const from = process.env.SMTP_FROM || process.env.SMTP_USER;
+  await transporter.sendMail({ from, to, subject, text, html });
+  return true;
+};
+
+const sendAdmissionSms = async ({ to, message }) => {
+  const apiKey = process.env.TERMII_API_KEY;
+  const sender = process.env.TERMII_SENDER_ID || "Excellence";
+  if (!apiKey) return false;
+  await axios.post("https://api.ng.termii.com/api/sms/send", {
+    to,
+    from: sender,
+    sms: message,
+    type: "plain",
+    channel: "dnd",
+    api_key: apiKey
+  });
+  return true;
+};
+
 app.get("/", (req, res) => {
   const success = req.query.success === "1";
   res.render("index", { success });
@@ -516,6 +552,50 @@ app.get("/dashboard/admissions", requireRole("owner", "admin"), async (req, res)
   } catch (err) {
     res.status(500).send("Failed to load admissions");
   }
+});
+
+app.post("/dashboard/admissions/:id/status", requireRole("owner", "admin"), async (req, res) => {
+  const { status, note } = req.body;
+  const allowed = new Set(["pending", "approved", "rejected", "waitlist"]);
+  if (!allowed.has(status)) {
+    return res.status(400).send("Invalid status");
+  }
+  const admission = await dbGet("SELECT * FROM admissions WHERE id = ?", [req.params.id]);
+  if (!admission) return res.status(404).send("Application not found");
+
+  await dbRun("UPDATE admissions SET status = ? WHERE id = ?", [status, req.params.id]);
+
+  const message =
+    `Hello ${admission.parent_name}, your child's admission status is ${status.toUpperCase()} ` +
+    `for ${admission.student_name} (${admission.class_applied}).` +
+    (note ? ` Note: ${note}` : "");
+
+  const emailSubject = `Admission Update - ${admission.student_name}`;
+  const emailHtml = `
+    <p>Hello ${admission.parent_name},</p>
+    <p>Your child's admission status is <strong>${status.toUpperCase()}</strong> for <strong>${admission.student_name}</strong> (${admission.class_applied}).</p>
+    ${note ? `<p><strong>Note:</strong> ${note}</p>` : ""}
+    <p>Thank you for choosing Excellence Academy.</p>
+  `;
+
+  try {
+    await sendAdmissionEmail({
+      to: admission.parent_email,
+      subject: emailSubject,
+      text: message,
+      html: emailHtml
+    });
+  } catch (err) {
+    console.error("Email send failed", err.message);
+  }
+
+  try {
+    await sendAdmissionSms({ to: admission.parent_phone, message });
+  } catch (err) {
+    console.error("SMS send failed", err.message);
+  }
+
+  res.redirect("/dashboard/admissions");
 });
 
 app.get("/dashboard/students", requireRole("owner", "admin", "teacher"), async (req, res) => {

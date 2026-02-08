@@ -14,6 +14,7 @@
                 <th>Contact</th>
                 <th>Status</th>
                 <th>Submitted</th>
+                <th>Action</th>
               </tr>
             </thead>
             <tbody>
@@ -41,11 +42,25 @@
                           <%= app.parent_email %>
                         </div>
                       </td>
-                      <td><span class="badge badge-primary">
+                      <td><span
+                          class="badge <%= app.status === 'approved' ? 'badge-success' : app.status === 'rejected' ? 'badge-warning' : 'badge-primary' %>">
                           <%= app.status %>
                         </span></td>
                       <td>
                         <%= app.created_at %>
+                      </td>
+                      <td>
+                        <form action="/dashboard/admissions/<%= app.id %>/status" method="POST" class="form"
+                          style="gap:0.5rem;">
+                          <select name="status" required>
+                            <option value="pending" <%=app.status==='pending' ? 'selected' : '' %>>Pending</option>
+                            <option value="approved" <%=app.status==='approved' ? 'selected' : '' %>>Approved</option>
+                            <option value="rejected" <%=app.status==='rejected' ? 'selected' : '' %>>Rejected</option>
+                            <option value="waitlist" <%=app.status==='waitlist' ? 'selected' : '' %>>Waitlist</option>
+                          </select>
+                          <input type="text" name="note" placeholder="Optional note" />
+                          <button class="btn" type="submit">Send</button>
+                        </form>
                       </td>
                     </tr>
                     <% }) %>
