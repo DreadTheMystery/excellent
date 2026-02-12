@@ -25,68 +25,64 @@
         id="admin-nav-links">
         <a href="/dashboard" class="<%= title === 'Dashboard' ? 'active' : '' %>"><i class="ri-dashboard-line"></i>
             Overview</a>
-        <% if (user && ['owner','admin','teacher'].includes(user.role)) { %>
+        <% if (user && user.role==='teacher' ) { %>
             <a href="/teacher" class="<%= title === 'Teacher Workspace' ? 'active' : '' %>"><i class="ri-team-line"></i>
                 Teacher Workspace</a>
-            <a href="/dashboard/timetable" class="<%= title === 'Timetable' ? 'active' : '' %>"><i
-                    class="ri-calendar-schedule-line"></i> Timetable</a>
-            <a href="/dashboard/students" class="<%= title === 'Students' ? 'active' : '' %>"><i
-                    class="ri-user-smile-line"></i> Students</a>
             <% } %>
-                <% if (user && user.role==='owner' ) { %>
-                    <a href="/dashboard/classes" class="<%= title === 'Classes' ? 'active' : '' %>"><i
-                            class="ri-community-line"></i> Classes</a>
+                <% if (user && ['owner','admin','teacher'].includes(user.role)) { %>
+                    <a href="/dashboard/students" class="<%= title === 'Students' ? 'active' : '' %>"><i
+                            class="ri-user-smile-line"></i> Students</a>
                     <% } %>
-                        <% if (user && ['owner','admin'].includes(user.role)) { %>
-                            <a href="/dashboard/teachers" class="<%= title === 'Teachers' ? 'active' : '' %>"><i
-                                    class="ri-presentation-line"></i> Teachers</a>
+                        <% if (user && user.role==='owner' ) { %>
+                            <a href="/dashboard/classes" class="<%= title === 'Classes' ? 'active' : '' %>"><i
+                                    class="ri-community-line"></i> Classes</a>
                             <% } %>
-                                <% if (user && ['owner','admin','accountant'].includes(user.role)) { %>
-                                    <a href="/dashboard/fee-plans"
-                                        class="<%= title === 'Fee Plans' ? 'active' : '' %>"><i
-                                            class="ri-file-list-2-line"></i> Fee Plans</a>
-                                    <a href="/dashboard/invoices" class="<%= title === 'Invoices' ? 'active' : '' %>"><i
-                                            class="ri-receipt-line"></i> Invoices</a>
-                                    <a href="/dashboard/payments"
-                                        class="<%= title === 'Student Payments' ? 'active' : '' %>"><i
-                                            class="ri-hand-coin-line"></i> Payments</a>
-                                    <a href="/dashboard/finance" class="<%= title === 'Finance' ? 'active' : '' %>"><i
-                                            class="ri-wallet-3-line"></i>
-                                        Finance</a>
+                                <% if (user && ['owner','admin'].includes(user.role)) { %>
+                                    <a href="/dashboard/teachers" class="<%= title === 'Teachers' ? 'active' : '' %>"><i
+                                            class="ri-presentation-line"></i> Teachers</a>
                                     <% } %>
-                                        <% if (user && ['owner','admin','teacher'].includes(user.role)) { %>
-                                            <a href="/dashboard/attendance/students"
-                                                class="<%= title === 'Student Attendance' ? 'active' : '' %>"><i
-                                                    class="ri-calendar-check-line"></i> Student Attendance</a>
-                                            <a href="/dashboard/attendance/teachers"
-                                                class="<%= title === 'Teacher Attendance' ? 'active' : '' %>"><i
-                                                    class="ri-user-follow-line"></i> Teacher Attendance</a>
-                                            <a href="/dashboard/report-cards"
-                                                class="<%= title === 'Report Cards' ? 'active' : '' %>"><i
-                                                    class="ri-file-chart-line"></i> Report Cards</a>
-                                            <a href="/dashboard/exams"
-                                                class="<%= title === 'Exams' ? 'active' : '' %>"><i
-                                                    class="ri-file-list-3-line"></i>
-                                                Exams</a>
-                                            <a href="/dashboard/results"
-                                                class="<%= title === 'Results' ? 'active' : '' %>"><i
-                                                    class="ri-bar-chart-groupped-line"></i> Results</a>
+                                        <% if (user && ['owner','admin','accountant'].includes(user.role)) { %>
+                                            <a href="/dashboard/fee-plans"
+                                                class="<%= title === 'Fee Plans' ? 'active' : '' %>"><i
+                                                    class="ri-file-list-2-line"></i> Fee Plans</a>
+                                            <a href="/dashboard/invoices"
+                                                class="<%= title === 'Invoices' ? 'active' : '' %>"><i
+                                                    class="ri-receipt-line"></i> Invoices</a>
+                                            <a href="/dashboard/payments"
+                                                class="<%= title === 'Student Payments' ? 'active' : '' %>"><i
+                                                    class="ri-hand-coin-line"></i> Payments</a>
+                                            <a href="/dashboard/finance"
+                                                class="<%= title === 'Finance' ? 'active' : '' %>"><i
+                                                    class="ri-wallet-3-line"></i>
+                                                Finance</a>
                                             <% } %>
-                                                <% if (user && ['owner','admin'].includes(user.role)) { %>
-                                                    <a href="/admin"
-                                                        class="<%= title === 'Inquiries' ? 'active' : '' %>"><i
-                                                            class="ri-message-3-line"></i>
-                                                        Inquiries</a>
-                                                    <a href="/dashboard/admissions"
-                                                        class="<%= title === 'Admissions' ? 'active' : '' %>"><i
-                                                            class="ri-file-add-line"></i>
-                                                        Admissions</a>
+                                                <% if (user && ['owner','admin','teacher'].includes(user.role)) { %>
+                                                    <a href="/dashboard/report-cards"
+                                                        class="<%= title === 'Report Cards' ? 'active' : '' %>"><i
+                                                            class="ri-file-chart-line"></i> Report Cards</a>
+                                                    <a href="/dashboard/exams"
+                                                        class="<%= title === 'Exams' ? 'active' : '' %>"><i
+                                                            class="ri-file-list-3-line"></i>
+                                                        Exams</a>
+                                                    <a href="/dashboard/results"
+                                                        class="<%= title === 'Results' ? 'active' : '' %>"><i
+                                                            class="ri-bar-chart-groupped-line"></i> Results</a>
                                                     <% } %>
-                                                        <% if (user && user.role==='owner' ) { %>
-                                                            <a href="/dashboard/users"
-                                                                class="<%= title === 'Users' ? 'active' : '' %>"><i
-                                                                    class="ri-shield-user-line"></i>
-                                                                Users</a>
+                                                        <% if (user && ['owner','admin'].includes(user.role)) { %>
+                                                            <a href="/admin"
+                                                                class="<%= title === 'Inquiries' ? 'active' : '' %>"><i
+                                                                    class="ri-message-3-line"></i>
+                                                                Inquiries</a>
+                                                            <a href="/dashboard/admissions"
+                                                                class="<%= title === 'Admissions' ? 'active' : '' %>"><i
+                                                                    class="ri-file-add-line"></i>
+                                                                Admissions</a>
                                                             <% } %>
+                                                                <% if (user && user.role==='owner' ) { %>
+                                                                    <a href="/dashboard/users"
+                                                                        class="<%= title === 'Users' ? 'active' : '' %>"><i
+                                                                            class="ri-shield-user-line"></i>
+                                                                        Users</a>
+                                                                    <% } %>
     </div>
 </nav>

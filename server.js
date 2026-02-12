@@ -8,6 +8,7 @@ const PDFDocument = require("pdfkit");
 const { Pool } = require("pg");
 const nodemailer = require("nodemailer");
 const axios = require("axios");
+const compression = require("compression");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -32,9 +33,19 @@ const toPgSql = (sql) => {
 app.set("view engine", "ejs");
 app.set("views", path.join(__dirname, "views"));
 
+// Enable Gzip compression
+app.use(compression());
+
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
-app.use(express.static(path.join(__dirname, "public")));
+
+// Serve static files with caching headers
+app.use(express.static(path.join(__dirname, "public"), {
+  maxAge: process.env.NODE_ENV === "production" ? "1y" : 0,
+  etag: true,
+  lastModified: true
+}));
+
 app.use(
   session({
     secret: process.env.SESSION_SECRET || "change-this-secret",
@@ -366,17 +377,37 @@ const sendAdmissionEmail = async ({ to, subject, text, html }) => {
 
 const sendAdmissionSms = async ({ to, message }) => {
   const apiKey = process.env.TERMII_API_KEY;
-  const sender = process.env.TERMII_SENDER_ID || "Excellence";
-  if (!apiKey) return false;
-  await axios.post("https://api.ng.termii.com/api/sms/send", {
-    to,
-    from: sender,
-    sms: message,
-    type: "plain",
-    channel: "dnd",
-    api_key: apiKey
-  });
-  return true;
+  const sender = process.env.TERMII_SENDER_ID || "N-Alert";
+  if (!apiKey) {
+    console.log("SMS not sent: TERMII_API_KEY not configured");
+    return false;
+  }
+  
+  // Format phone number for Termii (accepts 234XXXXXXXXXX format)
+  let phone = String(to).replace(/\s+/g, '');
+  if (phone.startsWith('0')) {
+    phone = '234' + phone.substring(1);
+  } else if (phone.startsWith('+234')) {
+    phone = phone.substring(1);
+  } else if (!phone.startsWith('234')) {
+    phone = '234' + phone;
+  }
+  
+  try {
+    const response = await axios.post("https://api.ng.termii.com/api/sms/send", {
+      to: phone,
+      from: sender,
+      sms: message,
+      type: "plain",
+      channel: "generic",
+      api_key: apiKey
+    });
+    console.log("SMS sent successfully to", phone, "Response:", response.data);
+    return true;
+  } catch (error) {
+    console.error("SMS send failed:", error.response?.data || error.message);
+    return false;
+  }
 };
 
 app.get("/", (req, res) => {
@@ -439,16 +470,18 @@ app.get("/login", (req, res) => {
 });
 
 app.post("/login", async (req, res) => {
-  const { email, password } = req.body;
-  if (!email || !password) {
+  const { email, password, role } = req.body;
+  if (!email || !password || !role) {
     return res.redirect("/login?error=1");
   }
   try {
     const user = await dbGet("SELECT * FROM users WHERE email = ?", [email.trim()]);
     if (!user) return res.redirect("/login?error=1");
+    if (user.role !== role) return res.redirect("/login?error=1");
     const isValid = bcrypt.compareSync(password, user.password_hash);
     if (!isValid) return res.redirect("/login?error=1");
     req.session.user = { id: user.id, name: user.name, role: user.role, email: user.email };
+    if (user.role === "teacher") return res.redirect("/teacher");
     return res.redirect("/dashboard");
   } catch (err) {
     return res.redirect("/login?error=1");
@@ -528,6 +561,18 @@ app.get("/dashboard", requireRole("owner", "admin", "teacher", "accountant"), as
     const outstanding = await dbGet(
       "SELECT COALESCE(SUM(total_fee - amount_paid), 0) as total FROM student_fees WHERE status = 'partial'"
     );
+    const feeBalances =
+      req.session.user.role === "owner"
+        ? await dbAll(
+            `SELECT students.id as student_id, students.first_name, students.last_name, students.class_name,
+                    invoices.term, invoices.session, invoices.total, invoices.amount_paid,
+                    (invoices.total - invoices.amount_paid) as balance, invoices.status
+             FROM invoices
+             JOIN students ON students.id = invoices.student_id
+             ORDER BY students.class_name, students.first_name, invoices.session, invoices.term`
+          )
+        : [];
+
     res.render("dashboard", {
       stats: {
         students: students.count,
@@ -538,7 +583,8 @@ app.get("/dashboard", requireRole("owner", "admin", "teacher", "accountant"), as
         income: income.total,
         expense: expense.total,
         outstanding: outstanding.total
-      }
+      },
+      feeBalances
     });
   } catch (err) {
     res.status(500).send("Failed to load dashboard");
@@ -578,21 +624,34 @@ app.post("/dashboard/admissions/:id/status", requireRole("owner", "admin"), asyn
     <p>Thank you for choosing Excellence Academy.</p>
   `;
 
+  console.log(`Processing admission status update for ${admission.student_name}`);
+  console.log(`Email: ${admission.parent_email}, Phone: ${admission.parent_phone}`);
+  
   try {
-    await sendAdmissionEmail({
+    const emailSent = await sendAdmissionEmail({
       to: admission.parent_email,
       subject: emailSubject,
       text: message,
       html: emailHtml
     });
+    if (emailSent) {
+      console.log("Email notification sent successfully");
+    } else {
+      console.log("Email not sent: SMTP not configured");
+    }
   } catch (err) {
-    console.error("Email send failed", err.message);
+    console.error("Email send failed:", err.message);
   }
 
   try {
-    await sendAdmissionSms({ to: admission.parent_phone, message });
+    const smsSent = await sendAdmissionSms({ to: admission.parent_phone, message });
+    if (smsSent) {
+      console.log("SMS notification sent successfully");
+    } else {
+      console.log("SMS not sent: Check configuration");
+    }
   } catch (err) {
-    console.error("SMS send failed", err.message);
+    console.error("SMS send error:", err.message);
   }
 
   res.redirect("/dashboard/admissions");
@@ -655,7 +714,13 @@ app.get("/teacher", requireRole("owner", "admin", "teacher"), async (req, res) =
   try {
     const teacherClass = await getTeacherClass(req.session.user);
     if (req.session.user.role === "teacher" && !teacherClass) {
-      return res.status(403).render("forbidden");
+      // Teacher not assigned to a class yet - show empty state
+      return res.render("teacher", {
+        students: [],
+        assessments: [],
+        classOptions: [],
+        notAssigned: true
+      });
     }
     const [students, assessments] = await Promise.all([
       req.session.user.role === "teacher" && teacherClass
@@ -673,7 +738,8 @@ app.get("/teacher", requireRole("owner", "admin", "teacher"), async (req, res) =
     res.render("teacher", {
       students,
       assessments,
-      classOptions: req.session.user.role === "teacher" && teacherClass ? [teacherClass] : CLASS_OPTIONS
+      classOptions: req.session.user.role === "teacher" && teacherClass ? [teacherClass] : CLASS_OPTIONS,
+      notAssigned: false
     });
   } catch (err) {
     res.status(500).send("Failed to load teacher workspace");

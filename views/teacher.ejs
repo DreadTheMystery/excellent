@@ -2,122 +2,104 @@
   <%- include('partials/adminNav', { title: 'Teacher Workspace' }) %>
 
     <main class="container section">
-      <div class="panel">
-        <h2>Student Attendance</h2>
-        <form action="/dashboard/attendance/students" method="POST" class="form grid-form">
-          <select name="student_id" required>
-            <option value="">Select Student</option>
-            <% students.forEach((student)=> { %>
-              <option value="<%= student.id %>">
-                <%= student.first_name %>
-                  <%= student.last_name %> - <%= student.class_name %>
-              </option>
-              <% }) %>
-          </select>
-          <select name="class_name" required>
-            <option value="">Class</option>
-            <% classOptions.forEach((className)=> { %>
-              <option value="<%= className %>">
-                <%= className %>
-              </option>
-              <% }) %>
-          </select>
-          <input type="date" name="attendance_date" value="<%= new Date().toISOString().slice(0,10) %>" required />
-          <select name="status" required>
-            <option value="Present">Present</option>
-            <option value="Absent">Absent</option>
-            <option value="Late">Late</option>
-          </select>
-          <button class="btn" type="submit">Save Attendance</button>
-        </form>
-      </div>
-
-      <div class="panel">
-        <h2>Record CA / Exam Scores</h2>
-        <form action="/teacher/assessments" method="POST" class="form grid-form">
-          <select name="student_id" required>
-            <option value="">Select Student</option>
-            <% students.forEach((student)=> { %>
-              <option value="<%= student.id %>">
-                <%= student.first_name %>
-                  <%= student.last_name %> - <%= student.class_name %>
-              </option>
-              <% }) %>
-          </select>
-          <select name="class_name" required>
-            <option value="">Class</option>
-            <% classOptions.forEach((className)=> { %>
-              <option value="<%= className %>">
-                <%= className %>
-              </option>
-              <% }) %>
-          </select>
-          <input type="text" name="term" placeholder="Term (First/Second/Third)" required />
-          <input type="text" name="session" placeholder="Session (e.g. 2026/2027)" required />
-          <input type="text" name="subject" placeholder="Subject" required />
-          <select name="assessment_type" required>
-            <option value="">Assessment Type</option>
-            <option value="CA1">CA1</option>
-            <option value="CA2">CA2</option>
-            <option value="CA3">CA3</option>
-            <option value="Exam">Exam</option>
-          </select>
-          <input type="number" name="score" step="0.01" placeholder="Score" required />
-          <button class="btn" type="submit">Save Score</button>
-        </form>
-      </div>
-
-      <div class="panel">
-        <h2>Recent CA / Exam Records</h2>
-        <div class="table-wrapper">
-          <table class="table">
-            <thead>
-              <tr>
-                <th>Student</th>
-                <th>Class</th>
-                <th>Term</th>
-                <th>Session</th>
-                <th>Subject</th>
-                <th>Type</th>
-                <th>Score</th>
-              </tr>
-            </thead>
-            <tbody>
-              <% if (!assessments.length) { %>
-                <tr>
-                  <td colspan="7">No assessments recorded yet.</td>
-                </tr>
-                <% } %>
-                  <% assessments.forEach((item)=> { %>
-                    <tr>
-                      <td>
-                        <%= item.first_name %>
-                          <%= item.last_name %>
-                      </td>
-                      <td>
-                        <%= item.class_name %>
-                      </td>
-                      <td>
-                        <%= item.term %>
-                      </td>
-                      <td>
-                        <%= item.session %>
-                      </td>
-                      <td>
-                        <%= item.subject %>
-                      </td>
-                      <td><span class="badge badge-primary">
-                          <%= item.assessment_type %>
-                        </span></td>
-                      <td>
-                        <%= item.score %>
-                      </td>
-                    </tr>
-                    <% }) %>
-            </tbody>
-          </table>
+      <% if (notAssigned) { %>
+        <div class="panel">
+          <h2>Teacher Not Assigned</h2>
+          <p>Your account is not yet assigned to a class. Please contact the school owner or admin to assign you to a
+            class in the Teachers module.</p>
+          <p><strong>Your email:</strong>
+            <%= user.email %>
+          </p>
         </div>
-      </div>
+        <% } else { %>
+
+          <div class="panel">
+            <h2>Record CA / Exam Scores</h2>
+            <form action="/teacher/assessments" method="POST" class="form grid-form">
+              <select name="student_id" required>
+                <option value="">Select Student</option>
+                <% students.forEach((student)=> { %>
+                  <option value="<%= student.id %>">
+                    <%= student.first_name %>
+                      <%= student.last_name %> - <%= student.class_name %>
+                  </option>
+                  <% }) %>
+              </select>
+              <select name="class_name" required>
+                <option value="">Class</option>
+                <% classOptions.forEach((className)=> { %>
+                  <option value="<%= className %>">
+                    <%= className %>
+                  </option>
+                  <% }) %>
+              </select>
+              <input type="text" name="term" placeholder="Term (First/Second/Third)" required />
+              <input type="text" name="session" placeholder="Session (e.g. 2026/2027)" required />
+              <input type="text" name="subject" placeholder="Subject" required />
+              <select name="assessment_type" required>
+                <option value="">Assessment Type</option>
+                <option value="CA1">CA1</option>
+                <option value="CA2">CA2</option>
+                <option value="CA3">CA3</option>
+                <option value="Exam">Exam</option>
+              </select>
+              <input type="number" name="score" step="0.01" placeholder="Score" required />
+              <button class="btn" type="submit">Save Score</button>
+            </form>
+          </div>
+
+          <div class="panel">
+            <h2>Recent CA / Exam Records</h2>
+            <div class="table-wrapper">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>Student</th>
+                    <th>Class</th>
+                    <th>Term</th>
+                    <th>Session</th>
+                    <th>Subject</th>
+                    <th>Type</th>
+                    <th>Score</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <% if (!assessments.length) { %>
+                    <tr>
+                      <td colspan="7">No assessments recorded yet.</td>
+                    </tr>
+                    <% } %>
+                      <% assessments.forEach((item)=> { %>
+                        <tr>
+                          <td>
+                            <%= item.first_name %>
+                              <%= item.last_name %>
+                          </td>
+                          <td>
+                            <%= item.class_name %>
+                          </td>
+                          <td>
+                            <%= item.term %>
+                          </td>
+                          <td>
+                            <%= item.session %>
+                          </td>
+                          <td>
+                            <%= item.subject %>
+                          </td>
+                          <td><span class="badge badge-primary">
+                              <%= item.assessment_type %>
+                            </span></td>
+                          <td>
+                            <%= item.score %>
+                          </td>
+                        </tr>
+                        <% }) %>
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <% } %>
     </main>
 
     <%- include('partials/adminFooter') %>

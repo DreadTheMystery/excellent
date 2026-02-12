@@ -73,6 +73,59 @@
                     </div>
                 </div>
             </div>
+
+            <% if (feeBalances && feeBalances.length) { %>
+                <div class="panel" style="margin-top: 2rem;">
+                    <h2>Student Fee Balances (Owner)</h2>
+                    <div class="table-wrapper">
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>Student</th>
+                                    <th>Class</th>
+                                    <th>Term</th>
+                                    <th>Session</th>
+                                    <th>Total</th>
+                                    <th>Paid</th>
+                                    <th>Balance</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <% feeBalances.forEach((row)=> { %>
+                                    <tr>
+                                        <td>
+                                            <%= row.first_name %>
+                                                <%= row.last_name %>
+                                        </td>
+                                        <td>
+                                            <%= row.class_name %>
+                                        </td>
+                                        <td>
+                                            <%= row.term %>
+                                        </td>
+                                        <td>
+                                            <%= row.session %>
+                                        </td>
+                                        <td>₦<%= Number(row.total || 0).toLocaleString('en-NG') %>
+                                        </td>
+                                        <td>₦<%= Number(row.amount_paid || 0).toLocaleString('en-NG') %>
+                                        </td>
+                                        <td>₦<%= Number(row.balance || 0).toLocaleString('en-NG') %>
+                                        </td>
+                                        <td>
+                                            <span
+                                                class="badge <%= row.status === 'paid' ? 'badge-success' : row.status === 'partial' ? 'badge-warning' : 'badge-primary' %>">
+                                                <%= row.status %>
+                                            </span>
+                                        </td>
+                                    </tr>
+                                    <% }) %>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <% } %>
         </main>
 
         <%- include('partials/adminFooter') %>

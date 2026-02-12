@@ -1,3 +1,4 @@
+// Smooth scroll
 document.querySelectorAll('a[href^="#"]').forEach((anchor) => {
   anchor.addEventListener('click', (event) => {
     const targetId = anchor.getAttribute('href');
@@ -9,6 +10,24 @@ document.querySelectorAll('a[href^="#"]').forEach((anchor) => {
     }
   });
 });
+
+// Lazy load images
+if ('IntersectionObserver' in window) {
+  const lazyImages = document.querySelectorAll('img[loading="lazy"]');
+  const imageObserver = new IntersectionObserver((entries) => {
+    entries.forEach((entry) => {
+      if (entry.isIntersecting) {
+        const img = entry.target;
+        if (img.dataset.src) {
+          img.src = img.dataset.src;
+          img.removeAttribute('data-src');
+        }
+        imageObserver.unobserve(img);
+      }
+    });
+  });
+  lazyImages.forEach((img) => imageObserver.observe(img));
+}
 
 // Typewriter Effect
 const typingText = document.querySelector("#typing-text");
